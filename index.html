@@ -27,54 +27,30 @@
     </style>
 
     <script>
-        // 設定：サイズや距離はここで調整してください
-        const SETTINGS = {
-            distance: 3.5,    // カメラからの水平距離（メートル）
-            heightOffset: -1.5, // カメラの高さに対して、モデルをどれくらい下げるか
-            smoothFactor: 0.1,  // 追従の滑らかさ（0.01?1.0）。小さいほどヌルっとしてガタつきが消える
-            scale: 1.8          // モデルの大きさ
-        };
-
-        // 【修正版】重力固定・水平追従システム
-        AFRAME.registerComponent('gravity-billboard', {
-            init: function() {
+        // 【決定版】ゴンドラ制御システム
+        // カメラの「横回転(Y)」と「位置」だけをコピーする
+        // 数学的なベクトル計算を使わないため、バグで消えることがない
+        AFRAME.registerComponent('camera-yaw-lock', {
+            init: function () {
                 this.camera = document.querySelector('[camera]');
-                // ガタつき防止用の「現在の目標位置」保持用
-                this.targetPos = new THREE.Vector3();
             },
-
             tick: function () {
                 if (!this.camera) return;
-                
-                const camObj = this.camera.object3D;
-                const modelObj = this.el.object3D;
 
-                // 1. カメラの「向き」を取得するが、Y軸（上下）の傾きは無視する
-                // これにより、上を向いてもモデルは上に逃げず、ローアングルになる
-                const camDir = new THREE.Vector3();
-                camObj.getWorldDirection(camDir);
-                camDir.y = 0; // 上下の成分を捨てる（水平成分のみ）
-                camDir.normalize(); // 長さを1に戻す
+                var rig = this.el.object3D;
+                var cam = this.camera.object3D;
 
-                // 2. 目標位置を計算（カメラの位置 + 水平方向 * 距離）
-                const targetPosition = new THREE.Vector3();
-                targetPosition.copy(camObj.position);
-                targetPosition.add(camDir.multiplyScalar(SETTINGS.distance));
-                
-                // 高さはカメラの高さ基準で固定（上下についてもこない＝ロー/ハイアングル実現）
-                targetPosition.y = camObj.position.y + SETTINGS.heightOffset;
+                // 1. 位置をカメラと完全に同期させる
+                rig.position.copy(cam.position);
 
-                // 3. 座標のガタつき防止（Lerp補間）
-                // いきなりtargetPositionに飛ばず、少しずつ近づけることで手ブレを吸収する
-                modelObj.position.lerp(targetPosition, SETTINGS.smoothFactor);
+                // 2. 回転を同期させるが、少し工夫する
+                // カメラの回転情報（クォータニオン）から、Y軸（水平）の角度だけを抽出する
+                var camEuler = new THREE.Euler();
+                camEuler.setFromQuaternion(cam.quaternion, 'YXZ');
 
-                // 4. 向きの制御（重力固定ビルボード）
-                // まずカメラの方を向かせる
-                modelObj.lookAt(camObj.position.x, modelObj.position.y, camObj.position.z);
-                
-                // lookAtだけだと変な回転が入ることがあるので、念の為X/Z回転をロックし直立を保つ
-                modelObj.rotation.x = 0;
-                modelObj.rotation.z = 0;
+                // 3. ゴンドラの回転をセット（XとZは0に固定＝水平維持）
+                // これにより、スマホを傾けてもキャラクターは直立不動になる
+                rig.rotation.set(0, camEuler.y, 0);
             }
         });
 
@@ -102,9 +78,9 @@
         <div class="chat-container">
             <div class="speaker-name">AKANE</div>
             <div class="message-text">
-                お待たせしました。<br>
-                これで「ガタつき」がなくなり、<br>
-                上を見ればアゴが、横に傾けても私が直立して見えます。
+                お待たせしました！<br>
+                今度こそ消えません。<br>
+                上や下を向くと、アングルが変わりますよ。
             </div>
         </div>
     </div>
@@ -120,11 +96,15 @@
 
         <a-entity camera look-controls></a-entity>
 
-        <a-entity 
-            gltf-model="#akane-model" 
-            scale="1.8 1.8 1.8"
-            model-opacity="0.7"
-            gravity-billboard>
+        <a-entity camera-yaw-lock>
+            
+            <a-entity 
+                gltf-model="#akane-model" 
+                position="0 -1.6 -3.5"
+                scale="1.8 1.8 1.8"
+                model-opacity="0.7">
+            </a-entity>
+
         </a-entity>
 
     </a-scene>
