@@ -9,9 +9,11 @@
     <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
 
     <style>
-        body { margin: 0; overflow: hidden; font-family: "Helvetica Neue", Arial, sans-serif; }
-        
-        /* チャットエリア */
+        /* UIデザイン */
+        body { 
+            margin: 0; overflow: hidden; 
+            font-family: "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif;
+        }
         #ui-layer {
             position: absolute; bottom: 0; left: 0; width: 100%; height: 30%;
             pointer-events: none; display: flex; flex-direction: column; justify-content: flex-end; z-index: 10;
@@ -27,16 +29,6 @@
     </style>
 
     <script>
-        // ビルボード機能（常にカメラを見る）
-        AFRAME.registerComponent('always-look-at', {
-            schema: { type: 'selector' },
-            tick: function () {
-                var target = this.data;
-                var object = this.el.object3D;
-                if (target) object.lookAt(target.object3D.position);
-            }
-        });
-
         // 半透明機能
         AFRAME.registerComponent('model-opacity', {
             schema: { default: 0.7 },
@@ -61,15 +53,16 @@
         <div class="chat-container">
             <div class="speaker-name">AKANE</div>
             <div class="message-text">
-                表示されましたか？<br>
-                サイズを調整して、Loading画面を削除しました。
+                プロデューサーさん！<br>
+                これなら画面から見切れませんよね？<br>
+                常にあなたの目の前にいます。
             </div>
         </div>
     </div>
 
     <a-scene 
         embedded 
-        arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono_and_matrix; matrixCodeType: 3x3;"
+        arjs="sourceType: webcam; debugUIEnabled: false;"
         renderer="logarithmicDepthBuffer: true; colorManagement: true;"
         vr-mode-ui="enabled: false">
 
@@ -77,14 +70,16 @@
             <a-asset-item id="akane-model" src="akane.glb"></a-asset-item>
         </a-assets>
 
-        <a-entity camera id="cam" look-controls></a-entity>
+        <a-entity camera look-controls>
+            
+            <a-entity 
+                gltf-model="#akane-model" 
+                position="0 -0.4 -1"
+                scale="0.45 0.45 0.45"
+                rotation="0 0 0"
+                model-opacity="0.7">
+            </a-entity>
 
-        <a-entity 
-            gltf-model="#akane-model" 
-            position="0 -0.5 -3"
-            scale="0.1 0.1 0.1"
-            always-look-at="#cam"
-            model-opacity="0.7">
         </a-entity>
 
     </a-scene>
