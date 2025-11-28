@@ -9,11 +9,9 @@
     <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
 
     <style>
-        /* UIデザイン */
-        body { 
-            margin: 0; overflow: hidden; 
-            font-family: "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif;
-        }
+        /* 文字化け防止 & UIデザイン */
+        body { margin: 0; overflow: hidden; font-family: "Helvetica Neue", Arial, sans-serif; }
+        
         #ui-layer {
             position: absolute; bottom: 0; left: 0; width: 100%; height: 30%;
             pointer-events: none; display: flex; flex-direction: column; justify-content: flex-end; z-index: 10;
@@ -29,6 +27,55 @@
     </style>
 
     <script>
+        // ★調整用パラメータ（ここを変えるだけでサイズや位置が変わります）
+        const SETTINGS = {
+            scale: 1.8,       // キャラクターの大きさ（1.8倍）
+            distance: 4.0,    // カメラからの距離（メートル）
+            yOffset: -1.6     // 画面中央よりどれくらい下げるか（全身を入れるため下げる）
+        };
+
+        // 【新機能】ジャイロ追従型ビルボード
+        // カメラの子要素にはせず、計算で「常に目の前」に配置することで
+        // 画面傾きに対する独立した姿勢制御（ジャイロ感）を実現する
+        AFRAME.registerComponent('gyro-follower', {
+            tick: function () {
+                var camera = document.querySelector('[camera]');
+                var model = this.el.object3D;
+                var camObj = camera.object3D;
+
+                if (!camObj) return;
+
+                // 1. 位置の計算（XY軸固定）
+                // カメラの「向いている方向」を取得
+                var direction = new THREE.Vector3();
+                camObj.getWorldDirection(direction); 
+                // A-Frame(Three.js)のカメラはZマイナスを向いているため反転不要だが、
+                // ベクトル計算として「カメラ位置 + (方向 * 距離)」を求める
+                
+                // カメラの位置
+                var targetPos = new THREE.Vector3();
+                targetPos.copy(camObj.position);
+
+                // カメラの向いている方向の先に、指定距離ぶん進める
+                // (directionは正規化されているため、距離を掛ける)
+                direction.multiplyScalar(-SETTINGS.distance); // Zマイナス方向へ伸ばす
+                targetPos.add(direction);
+
+                // 2. 高さの補正（全身を映すためのY軸調整）
+                // 単純にワールド座標系でYを下げる（カメラの傾きには依存させない＝ここがジャイロのキモ）
+                targetPos.y += SETTINGS.yOffset;
+
+                // 計算した位置にモデルを移動
+                model.position.copy(targetPos);
+
+                // 3. 向きの制御（目線固定）
+                // モデルの位置から、カメラの位置を見る
+                // lookAtはデフォルトで「Y軸（天井）を上」として計算するため、
+                // スマホを傾けてもキャラクターは斜めにならず、垂直を保つ
+                model.lookAt(camObj.position);
+            }
+        });
+
         // 半透明機能
         AFRAME.registerComponent('model-opacity', {
             schema: { default: 0.7 },
@@ -53,9 +100,9 @@
         <div class="chat-container">
             <div class="speaker-name">AKANE</div>
             <div class="message-text">
-                プロデューサーさん！<br>
-                これなら画面から見切れませんよね？<br>
-                常にあなたの目の前にいます。
+                これで完璧です。<br>
+                スマホを傾けてみてください。<br>
+                私は画面中央にいますが、姿勢は垂直を保ちます。
             </div>
         </div>
     </div>
@@ -63,23 +110,19 @@
     <a-scene 
         embedded 
         arjs="sourceType: webcam; debugUIEnabled: false;"
-        renderer="logarithmicDepthBuffer: true; colorManagement: true;"
         vr-mode-ui="enabled: false">
 
         <a-assets>
             <a-asset-item id="akane-model" src="akane.glb"></a-asset-item>
         </a-assets>
 
-        <a-entity camera look-controls>
-            
-            <a-entity 
-                gltf-model="#akane-model" 
-                position="0 -0.4 -1"
-                scale="0.45 0.45 0.45"
-                rotation="0 0 0"
-                model-opacity="0.7">
-            </a-entity>
+        <a-entity camera look-controls></a-entity>
 
+        <a-entity 
+            gltf-model="#akane-model" 
+            scale="1.8 1.8 1.8"
+            model-opacity="0.7"
+            gyro-follower>
         </a-entity>
 
     </a-scene>
