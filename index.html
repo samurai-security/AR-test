@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+ï»¿<!DOCTYPE html>
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
@@ -9,99 +9,46 @@
     <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
 
     <style>
-        /* UIƒŒƒCƒ„[‚ÌƒXƒ^ƒCƒ‹iŠ®¬ƒCƒ[ƒW AR2.jpg ‚ğCSS‚ÅÄŒ»j */
         body { margin: 0; overflow: hidden; font-family: "Helvetica Neue", Arial, sans-serif; }
         
-        /* ƒ`ƒƒƒbƒgƒGƒŠƒAi‰æ–Ê‰º•”j */
+        /* ãƒãƒ£ãƒƒãƒˆã‚¨ãƒªã‚¢ */
         #ui-layer {
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            width: 100%;
-            height: 30%; /* ‰æ–Ê‰º•”30%‚ğè—L */
-            pointer-events: none; /* AR‘€ì‚ğ×–‚‚µ‚È‚¢‚æ‚¤‚É */
-            display: flex;
-            flex-direction: column;
-            justify-content: flex-end;
-            z-index: 10;
+            position: absolute; bottom: 0; left: 0; width: 100%; height: 30%;
+            pointer-events: none; display: flex; flex-direction: column; justify-content: flex-end; z-index: 10;
         }
-
-        /* ƒ`ƒƒƒbƒgƒ{ƒbƒNƒX•—‚Ì‰æ‘œƒRƒ“ƒeƒi */
         .chat-container {
-            width: 90%;
-            margin: 0 auto 20px auto;
-            background: rgba(0, 0, 0, 0.6); /* ‰æ‘œ‚ª‚È‚¢‚½‚ß‚Ì‰¼ƒfƒUƒCƒ“i”¼“§–¾•j */
-            border: 2px solid #00ffff; /* ƒTƒCƒo[•—‚Ì˜gü */
-            border-radius: 10px;
-            padding: 15px;
-            pointer-events: auto; /* ƒ`ƒƒƒbƒg—“‚Í‘€ì‰Â”\‚É */
-            box-sizing: border-box;
-            color: #fff;
-            position: relative;
+            width: 90%; margin: 0 auto 20px auto;
+            background: rgba(0, 0, 0, 0.6);
+            border: 2px solid #00ffff; border-radius: 10px; padding: 15px;
+            pointer-events: auto; box-sizing: border-box; color: #fff;
         }
-
-        /* ‰æ‘œ‘fŞ‚ª‚ ‚éê‡‚ÍAã‚Ìbackground“™‚ğÁ‚µ‚Ä‚±‚Ìimg‚ğg‚¤ */
-        .chat-bg-image {
-            position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
-            z-index: -1;
-            display: none; /* ‰æ‘œ‚ª‚È‚¢‚Ì‚Å¡‚Í”ñ•\¦ */
-        }
-
-        .speaker-name {
-            font-size: 14px;
-            font-weight: bold;
-            color: #00ffff;
-            margin-bottom: 5px;
-        }
-
-        .message-text {
-            font-size: 16px;
-            line-height: 1.4;
-            text-shadow: 1px 1px 2px black;
-        }
-
-        /* ƒ[ƒfƒBƒ“ƒO‰æ–Ê */
-        .arjs-loader {
-            height: 100%; width: 100%; position: absolute; top: 0; left: 0;
-            background-color: rgba(0, 0, 0, 0.8); z-index: 9999;
-            display: flex; justify-content: center; align-items: center;
-        }
-        .arjs-loader div {
-            text-align: center; font-size: 1.25em; color: white;
-        }
+        .speaker-name { font-size: 14px; font-weight: bold; color: #00ffff; margin-bottom: 5px; }
+        .message-text { font-size: 16px; line-height: 1.4; text-shadow: 1px 1px 2px black; }
     </style>
 
     <script>
-        // yƒrƒ‹ƒ{[ƒh‹@”\zí‚ÉƒJƒƒ‰‚Ì•û‚ğŒü‚­
+        // ãƒ“ãƒ«ãƒœãƒ¼ãƒ‰æ©Ÿèƒ½ï¼ˆå¸¸ã«ã‚«ãƒ¡ãƒ©ã‚’è¦‹ã‚‹ï¼‰
         AFRAME.registerComponent('always-look-at', {
             schema: { type: 'selector' },
             tick: function () {
                 var target = this.data;
                 var object = this.el.object3D;
-                if (target) {
-                    object.lookAt(target.object3D.position);
-                }
+                if (target) object.lookAt(target.object3D.position);
             }
         });
 
-        // y”¼“§–¾‹@”\zGLBƒ‚ƒfƒ‹‚Ì•s“§–¾“x‚ğ‹­§•ÏX‚·‚é
+        // åŠé€æ˜æ©Ÿèƒ½
         AFRAME.registerComponent('model-opacity', {
-            schema: { default: 0.7 }, // ƒfƒtƒHƒ‹ƒg“§‰ß“x 0.7
-            init: function () {
-                this.el.addEventListener('model-loaded', this.update.bind(this));
-            },
+            schema: { default: 0.7 },
+            init: function () { this.el.addEventListener('model-loaded', this.update.bind(this)); },
             update: function () {
                 var mesh = this.el.getObject3D('mesh');
                 var data = this.data;
                 if (!mesh) return;
-                
                 mesh.traverse(function (node) {
                     if (node.isMesh) {
                         node.material.transparent = true;
                         node.material.opacity = data;
-                        // —¼–Ê•`‰æi•K—v‚Å‚ ‚ê‚Îj
-                        // node.material.side = THREE.DoubleSide; 
                     }
                 });
             }
@@ -110,19 +57,12 @@
 </head>
 
 <body>
-    <div class="arjs-loader">
-        <div>Loading AR...</div>
-    </div>
-
     <div id="ui-layer">
         <div class="chat-container">
-            <img src="path/to/chat_bg.png" class="chat-bg-image" alt="">
-            
             <div class="speaker-name">AKANE</div>
             <div class="message-text">
-                ‚±‚ñ‚É‚¿‚ÍI<br>
-                ƒvƒƒfƒ…[ƒT[‚³‚ñA•·‚±‚¦‚Ä‚¢‚Ü‚·‚©H<br>
-                AR‹óŠÔ‚Ö‚æ‚¤‚±‚»B
+                è¡¨ç¤ºã•ã‚Œã¾ã—ãŸã‹ï¼Ÿ<br>
+                ã‚µã‚¤ã‚ºã‚’èª¿æ•´ã—ã¦ã€Loadingç”»é¢ã‚’å‰Šé™¤ã—ã¾ã—ãŸã€‚
             </div>
         </div>
     </div>
@@ -141,8 +81,8 @@
 
         <a-entity 
             gltf-model="#akane-model" 
-            position="0 0 -4"
-            scale="1 1 1"
+            position="0 -0.5 -3"
+            scale="0.1 0.1 0.1"
             always-look-at="#cam"
             model-opacity="0.7">
         </a-entity>
