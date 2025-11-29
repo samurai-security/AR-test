@@ -153,7 +153,7 @@
 
   <div id="chat-container">
     <div id="chat-box">
-      <div id="version-tag">Claude021</div>
+      <div id="version-tag">Claude022</div>
       <div id="chat-text">
         みなさんこんにちは。わたしはAIコンシェルジュのあかねです。<br>
         終活に関するご相談をお手伝いします。
@@ -180,6 +180,7 @@
 
     let scene, camera, renderer;
     let akane = null;
+    let modelLoaded = false;
 
     let targetYaw = 0;
     let targetPitch = 0;
@@ -189,6 +190,7 @@
     let baseBeta = null;
     let baseGamma = null;
     let orientationInitialized = false;
+    let canInitializeOrientation = false;
 
     let isDragging = false;
     let lastX = 0;
@@ -255,8 +257,8 @@
       scene = new THREE.Scene();
 
       camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 100);
-      camera.position.set(0, 1.2, 3.0);
-      camera.lookAt(0, 1.0, 0);
+      camera.position.set(0, 0.85, 4.0);
+      camera.lookAt(0, 0.75, 0);
 
       renderer = new THREE.WebGLRenderer({ 
         canvas: canvas,
@@ -291,8 +293,8 @@
           function(gltf) {
             akane = gltf.scene;
             
-            akane.position.set(0, 0.1, 0);
-            akane.scale.set(1.45, 1.45, 1.45);
+            akane.position.set(0, 0.0, 0);
+            akane.scale.set(1.0, 1.0, 1.0);
 
             // 半透明化
             akane.traverse((node) => {
@@ -306,7 +308,15 @@
             });
 
             scene.add(akane);
-            log('モデル読み込み完了！ Yaw:0 Pitch:0');
+            modelLoaded = true;
+            log('読み込み完了！構えてからタップしてください');
+            
+            // 1.5秒後に傾き基準の設定を許可
+            setTimeout(() => {
+              canInitializeOrientation = true;
+              log('準備完了 - 構えた状態でタップ');
+            }, 1500);
+            
             resolve();
           },
           function(progress) {
@@ -377,12 +387,16 @@
     // デバイスオリエンテーション
     function onDeviceOrientation(event) {
       if (event.beta === null || event.gamma === null) return;
-
-      if (!orientationInitialized) {
+      
+      // モデル読み込み完了かつ初期化許可されるまで基準を設定しない
+      if (!orientationInitialized && canInitializeOrientation) {
         baseBeta = event.beta;
         baseGamma = event.gamma;
         orientationInitialized = true;
+        log('基準設定完了 Yaw:0 Pitch:0');
       }
+      
+      if (!orientationInitialized) return;
 
       let deltaBeta = event.beta - baseBeta;
       let deltaGamma = event.gamma - baseGamma;
@@ -450,7 +464,8 @@
       baseBeta = null;
       baseGamma = null;
       orientationInitialized = false;
-      log('リセット完了 Yaw:0 Pitch:0');
+      canInitializeOrientation = true; // 即座に再設定可能
+      log('リセット - 次の傾きを基準に設定');
     }
 
     function onResize() {
