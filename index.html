@@ -279,7 +279,7 @@
       <div id="chat-flap" onclick="toggleChatPanel()">
         <div id="flap-icon"></div>
       </div>
-      <div id="version-tag">Claude030</div>
+      <div id="version-tag">Claude031</div>
       <div id="chat-content">
         <div id="chat-text">
           みなさんこんにちは。わたしはAIコンシェルジュのあかねです。<br>
@@ -386,7 +386,7 @@
 
       camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 100);
       // カメラ設定（モデル高さ2.0、FOV50度から逆算）
-      camera.position.set(0, 1.3, 4.2);
+      camera.position.set(0, 1.3, 2.8);
       camera.lookAt(0, 0.7, 0);
 
       renderer = new THREE.WebGLRenderer({ 
@@ -432,7 +432,7 @@
                 const materials = Array.isArray(node.material) ? node.material : [node.material];
                 materials.forEach(mat => {
                   mat.transparent = true;
-                  mat.opacity = 0.9;
+                  mat.opacity = 0.75;
                 });
               }
             });
