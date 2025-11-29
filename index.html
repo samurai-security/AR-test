@@ -1,99 +1,52 @@
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport"
-        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-
-  <title>AR Akane</title>
-
-  <!-- 正しい順番：A-Frame → AR.js -->
-  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-  <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
-
-  <style>
-    html, body {
-      margin: 0;
-      padding: 0;
-      background: #000;
-      overflow: hidden;
-    }
-
-    a-scene {
-      position: fixed;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-    }
-  </style>
-</head>
-<body>
-
-<a-scene
-  embedded
-  vr-mode-ui="enabled:false"
-  renderer="colorManagement: true;"
-  arjs="sourceType: webcam; debugUIEnabled: false;">
-
-  <!-- asset -->
-  <a-assets>
-    <a-asset-item id="akaneModel" src="akane.glb"></a-asset-item>
-  </a-assets>
-
-  <!-- camera -->
-  <a-entity id="cameraRig">
-    <a-camera id="mainCamera"
-              look-controls="magicWindowTrackingEnabled: true;">
-    </a-camera>
-  </a-entity>
-
-  <!-- light -->
-  <a-entity light="type: ambient; intensity: 1.0"></a-entity>
-
-  <!-- GLTF キャラ -->
-  <a-entity id="akane"
-            gltf-model="#akaneModel"
-            position="0 -1.05 -2.2"
-            scale="1.5 1.5 1.5"
-            billboard-follow-camera
-            model-opacity="0.75">
-  </a-entity>
-
-</a-scene>
-
-<!-- 透明化 -->
-<script>
-AFRAME.registerComponent("model-opacity", {
-  schema: { type: "number", default: 0.75 },
-  init: function () {
-    this.el.addEventListener("model-loaded", () => {
-      const mesh = this.el.getObject3D("mesh");
-      if (!mesh) return;
-      mesh.traverse(node => {
-        if (node.isMesh) {
-          const apply = (mat) => {
-            mat.transparent = true;
-            mat.opacity = this.data;
-            mat.depthWrite = false;
-          };
-          Array.isArray(node.material)
-            ? node.material.forEach(apply)
-            : apply(node.material);
-        }
-      });
-    });
-  }
-});
-</script>
-
-<!-- ビルボード（GLTF mesh に適用する完全版） -->
 <script>
 AFRAME.registerComponent("billboard-follow-camera", {
   init: function () {
-    this.camera = document.querySelector("#mainCamera").object3D;
+    // カメラ
+    this.cameraEl =
+      document.querySelector("#mainCamera") ||
+      document.querySelector("[camera]") ||
+      null;
+
+    this.camera = this.cameraEl ? this.cameraEl.object3D : null;
+
+    // 座標ベクトル
     this.camPos = new THREE.Vector3();
     this.objPos = new THREE.Vector3();
+
+    // GLTF mesh
     this.mesh = null;
 
+    // GLTFモデル読み込み後に mesh を取得
     this.el.addEventListener("model-loaded", () => {
-      this.mesh = this.el.getObj
+      this.mesh = this.el.getObject3D("mesh");
+    });
+  },
+
+  tick: function () {
+    // ---- エラー防止（商用レベル） ----
+    if (!this.camera) return;
+    if (!this.mesh) return;
+    if (!this.mesh.position) return;
+
+    const model = this.mesh;
+
+    // カメラ・モデルの位置
+    this.camera.getWorldPosition(this.camPos);
+    model.getWorldPosition(this.objPos);
+
+    const dx = this.camPos.x - this.objPos.x;
+    const dy = this.camPos.y - this.objPos.y;
+    const dz = this.camPos.z - this.objPos.z;
+
+    // 水平回転（Y軸） - 正しい
+    const yaw = Math.atan2(dx, dz);
+
+    // 垂直回転（X軸） - 正しい
+    const horizontal = Math.sqrt(dx * dx + dz * dz);
+    const pitch = Math.atan2(dy, horizontal) * -1;
+
+    // Z（ロール）は常に0（直立）
+    model.rotation.set(pitch, yaw, 0);
+  }
+});
+</script>
