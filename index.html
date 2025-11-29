@@ -26,22 +26,28 @@
     </style>
 
     <script>
-        // 【完全ビルボード】縦横両方の傾きに対応
-        AFRAME.registerComponent('full-billboard', {
+        // 【正解版】XY回転対応、Z軸（ロール）のみ禁止のビルボード
+        AFRAME.registerComponent('no-roll-billboard', {
             tick: function () {
                 var camera = this.el.sceneEl.camera;
                 if (!camera) return;
 
-                // カメラのワールド座標を取得
                 var cameraPos = new THREE.Vector3();
-                camera.getWorldPosition(cameraPos);
-
-                // キャラクターのワールド座標を取得
                 var characterPos = new THREE.Vector3();
+                camera.getWorldPosition(cameraPos);
                 this.el.object3D.getWorldPosition(characterPos);
 
-                // カメラの方向を向く（完全なlookAt）
-                this.el.object3D.lookAt(cameraPos);
+                // 方向ベクトルを計算
+                var direction = new THREE.Vector3().subVectors(cameraPos, characterPos).normalize();
+
+                // Y軸回転（ヨー）を計算
+                var yaw = Math.atan2(direction.x, direction.z);
+
+                // X軸回転（ピッチ）を計算
+                var pitch = Math.asin(-direction.y);
+
+                // Z軸回転（ロール）は0に固定
+                this.el.object3D.rotation.set(pitch, yaw, 0);
             }
         });
 
@@ -86,13 +92,12 @@
 
         <a-camera look-controls></a-camera>
 
-        <!-- キャラクターをシーン直下に配置（カメラから独立） -->
         <a-entity 
             gltf-model="#akane-model" 
             position="0 0 -3.5"
             scale="1.8 1.8 1.8"
             model-opacity="0.7"
-            full-billboard>
+            no-roll-billboard>
         </a-entity>
 
     </a-scene>
