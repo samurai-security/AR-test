@@ -1,123 +1,22 @@
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>AR Avatar Chat</title>
-    
-    <script src="https://aframe.io/releases/1.2.0/aframe.min.js"></script>
-    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+<script>
+AFRAME.registerComponent("billboard-follow-camera", {
+  schema: { cameraId: { type: "string", default: "mainCamera" } },
 
-    <style>
-        body { margin: 0; overflow: hidden; font-family: sans-serif; }
-        
-        #ui-layer {
-            position: absolute; bottom: 0; left: 0; width: 100%; height: 30%;
-            pointer-events: none; z-index: 10;
-            display: flex; justify-content: center; align-items: flex-end;
-            padding-bottom: 20px;
-        }
-        .chat-container {
-            width: 90%; background: rgba(0, 0, 0, 0.6);
-            border: 2px solid #00ffff; border-radius: 10px;
-            padding: 15px; color: #fff; pointer-events: auto;
-            box-sizing: border-box;
-        }
-        .speaker-name { font-size: 14px; font-weight: bold; color: #00ffff; margin-bottom: 5px; }
-        .message-text { font-size: 16px; line-height: 1.4; }
-    </style>
+  init: function () {
+    this.cameraEl = null;
+    this.camPos = new THREE.Vector3();
+    this.objPos = new THREE.Vector3();
+    this.model = null;
 
-    <script>
-        // 【Ver: Gemini005】対面スタビライザー
-        // 1. 位置：カメラの子要素なので物理的に固定
-        // 2. 姿勢：カメラの傾きを検知し、逆回転で「垂直」に戻す
-        // 3. 向き：カメラと同じだと背中を向けるため、180度反転して「対面」させる
-        AFRAME.registerComponent('gemini-stabilizer', {
-            tick: function () {
-                var el = this.el;
-                var camera = this.el.sceneEl.camera;
-                
-                if (!camera) return;
+    // GLTF読み込み完了後にmesh取得
+    this.el.addEventListener("model-loaded", () => {
+      this.model = this.el.getObject3D("mesh");  // ← GLTFモデル本体
+    });
+  },
 
-                // A. カメラ（親）のワールド回転を取得
-                var camQuat = new THREE.Quaternion();
-                camera.getWorldQuaternion(camQuat);
-
-                // B. カメラの方位（Yaw）だけを取り出す（傾きPitch/Rollは捨てる）
-                var euler = new THREE.Euler().setFromQuaternion(camQuat, 'YXZ');
-                
-                // C. 目標回転を作成
-                //    Yawに180度(Math.PI)を足して、カメラと向かい合わせる
-                var targetYaw = euler.y + Math.PI;
-                //    Pitch=0, Roll=0 で直立させる
-                var targetQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, targetYaw, 0));
-
-                // D. 補正計算：親の回転をキャンセルして目標回転にする
-                //    子の回転 = 親の逆回転 × 目標回転
-                var parentInv = camQuat.clone().invert();
-                var finalQuat = parentInv.multiply(targetQuat);
-
-                // E. 適用
-                el.object3D.quaternion.copy(finalQuat);
-            }
-        });
-
-        // 半透明化
-        AFRAME.registerComponent('model-opacity', {
-            schema: { default: 0.7 },
-            init: function () { this.el.addEventListener('model-loaded', this.update.bind(this)); },
-            update: function () {
-                var mesh = this.el.getObject3D('mesh');
-                var data = this.data;
-                if (!mesh) return;
-                mesh.traverse(function (node) {
-                    if (node.isMesh) {
-                        node.material.transparent = true;
-                        node.material.opacity = data;
-                    }
-                });
-            }
-        });
-    </script>
-</head>
-
-<body>
-    <div id="ui-layer">
-        <div class="chat-container">
-            <div class="speaker-name">AKANE (Gemini005)</div>
-            <div class="message-text">
-                ライブラリを復旧させました。<br>
-                ・位置固定<br>
-                ・垂直維持（アゴが見える）<br>
-                ・正面向き<br>
-                これら全てが動作します。
-            </div>
-        </div>
-    </div>
-
-    <a-scene 
-        embedded 
-        arjs="sourceType: webcam; debugUIEnabled: false;"
-        vr-mode-ui="enabled: false"
-        renderer="logarithmicDepthBuffer: true;">
-
-        <a-assets>
-            <a-asset-item id="akane-model" src="akane.glb"></a-asset-item>
-        </a-assets>
-
-        <a-entity camera look-controls>
-            
-            <a-entity position="0 -1.3 -3.5" gemini-stabilizer>
-                
-                <a-entity 
-                    gltf-model="#akane-model" 
-                    scale="1.8 1.8 1.8"
-                    model-opacity="0.7">
-                </a-entity>
-
-            </a-entity>
-
-        </a-entity>
-    </a-scene>
-</body>
-</html>
+  tick: function () {
+    if (!this.cameraEl) {
+      this.cameraEl = document.getElementById(this.data.cameraId);
+      if (!this.cameraEl) return;
+    }
+    if (!this.model) return; // ← GLTFがまだなら何もしない
