@@ -209,7 +209,7 @@
       left: 0;
       width: 100%;
       height: 100%;
-      background: rgba(0, 15, 25, 0.7);
+      background: linear-gradient(135deg, #0a1520 0%, #1a2a3a 100%);
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -366,13 +366,26 @@
           audio: false
         });
         video.srcObject = stream;
+        
+        // メタデータ読み込み完了後に再生
+        video.onloadedmetadata = () => {
+          video.play().catch(e => console.warn('自動再生失敗:', e));
+        };
       } catch (err) {
         console.warn('背面カメラ失敗:', err);
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'user' },
-          audio: false
-        });
-        video.srcObject = stream;
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: 'user' },
+            audio: false
+          });
+          video.srcObject = stream;
+          
+          video.onloadedmetadata = () => {
+            video.play().catch(e => console.warn('自動再生失敗:', e));
+          };
+        } catch (err2) {
+          console.error('カメラ取得失敗:', err2);
+        }
       }
     }
 

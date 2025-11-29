@@ -279,7 +279,7 @@
       <div id="chat-flap" onclick="toggleChatPanel()">
         <div id="flap-icon"></div>
       </div>
-      <div id="version-tag">Claude028</div>
+      <div id="version-tag">Claude029</div>
       <div id="chat-content">
         <div id="chat-text">
           みなさんこんにちは。わたしはAIコンシェルジュのあかねです。<br>
@@ -366,13 +366,26 @@
           audio: false
         });
         video.srcObject = stream;
+        
+        // メタデータ読み込み完了後に再生
+        video.onloadedmetadata = () => {
+          video.play().catch(e => console.warn('自動再生失敗:', e));
+        };
       } catch (err) {
         console.warn('背面カメラ失敗:', err);
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'user' },
-          audio: false
-        });
-        video.srcObject = stream;
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: 'user' },
+            audio: false
+          });
+          video.srcObject = stream;
+          
+          video.onloadedmetadata = () => {
+            video.play().catch(e => console.warn('自動再生失敗:', e));
+          };
+        } catch (err2) {
+          console.error('カメラ取得失敗:', err2);
+        }
       }
     }
 
