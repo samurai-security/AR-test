@@ -15,7 +15,6 @@
       height: 100%;
     }
 
-    /* カメラ映像（背景） */
     #camera-video {
       position: fixed;
       top: 0;
@@ -26,7 +25,6 @@
       z-index: 0;
     }
 
-    /* Three.js Canvas */
     #three-canvas {
       position: fixed;
       top: 0;
@@ -36,7 +34,6 @@
       z-index: 1;
     }
 
-    /* チャットUI */
     #chat-container {
       position: fixed;
       bottom: 0;
@@ -52,16 +49,14 @@
       border-radius: 12px;
       padding: 15px;
       margin-bottom: 12px;
-      box-shadow: 
-        0 0 20px rgba(0, 180, 255, 0.2),
-        inset 0 0 30px rgba(0, 100, 150, 0.1);
+      position: relative;
+      box-shadow: 0 0 20px rgba(0, 180, 255, 0.2);
     }
 
     #chat-text {
       color: #fff;
       font-size: 15px;
       line-height: 1.7;
-      text-shadow: 0 0 10px rgba(0, 200, 255, 0.3);
     }
 
     #version-tag {
@@ -85,15 +80,6 @@
       font-size: 15px;
       font-weight: 600;
       cursor: pointer;
-      transition: all 0.3s ease;
-    }
-
-    #btn-continue {
-      background: linear-gradient(135deg, #ffffff 0%, #e8e8e8 100%);
-      color: #333;
-    }
-
-    #btn-menu {
       background: linear-gradient(135deg, #ffffff 0%, #e8e8e8 100%);
       color: #333;
     }
@@ -102,7 +88,6 @@
       transform: scale(0.96);
     }
 
-    /* やり直すボタン */
     #retry-button {
       position: fixed;
       right: 15px;
@@ -133,36 +118,31 @@
       font-size: 9px;
     }
 
-    /* デバッグ情報（開発時のみ表示） */
     #debug-info {
       position: fixed;
       top: 8px;
       left: 8px;
-      background: rgba(0,0,0,0.6);
+      background: rgba(0,0,0,0.8);
       color: #0f0;
-      font-size: 10px;
-      padding: 8px;
+      font-size: 11px;
+      padding: 10px;
       border-radius: 5px;
       z-index: 100;
-      display: none; /* 本番時はnone */
+      max-width: 280px;
+    }
+
+    #debug-info.error {
+      color: #f55;
     }
   </style>
 </head>
 
 <body>
-  <!-- カメラ映像 -->
   <video id="camera-video" autoplay playsinline muted></video>
-
-  <!-- Three.js描画用Canvas -->
   <canvas id="three-canvas"></canvas>
 
-  <!-- デバッグ情報 -->
-  <div id="debug-info">
-    <div>Yaw: <span id="dbg-yaw">0</span>°</div>
-    <div>Pitch: <span id="dbg-pitch">0</span>°</div>
-  </div>
+  <div id="debug-info">初期化中...</div>
 
-  <!-- やり直すボタン -->
   <button id="retry-button">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
       <path d="M1 4v6h6M23 20v-6h-6"/>
@@ -171,14 +151,12 @@
     <span>やり直す</span>
   </button>
 
-  <!-- チャットUI -->
   <div id="chat-container">
     <div id="chat-box">
-      <div id="version-tag">Claude019</div>
+      <div id="version-tag">Claude020</div>
       <div id="chat-text">
         みなさんこんにちは。わたしはAIコンシェルジュのあかねです。<br>
-        終活に関するご相談やお手伝いをさせていただきます。<br>
-        お気軽にお声がけくださいね。
+        終活に関するご相談をお手伝いします。
       </div>
     </div>
     <div id="button-container">
@@ -187,100 +165,99 @@
     </div>
   </div>
 
-  <!-- Three.js -->
-  <script src="https://unpkg.com/three@0.155.0/build/three.min.js"></script>
-  <script src="https://unpkg.com/three@0.155.0/examples/js/loaders/GLTFLoader.js"></script>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
 
-  <script>
-    // =========================
-    // グローバル変数
-    // =========================
+  <script type="module">
+    import * as THREE from 'three';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
     let scene, camera, renderer;
     let akane = null;
 
-    // 回転ターゲット（カメラを向く方向）
-    let targetYaw = 0;     // Y軸回転（左右）
-    let targetPitch = 0;   // X軸回転（上下）
+    let targetYaw = 0;
+    let targetPitch = 0;
     let currentYaw = 0;
     let currentPitch = 0;
 
-    // デバイスオリエンテーション基準値
     let baseBeta = null;
     let baseGamma = null;
     let orientationInitialized = false;
 
-    // マウス/タッチ操作用
     let isDragging = false;
     let lastX = 0;
     let lastY = 0;
 
-    // =========================
-    // 初期化
-    // =========================
-    init();
-    animate();
+    const debugEl = document.getElementById('debug-info');
 
-    async function init() {
-      // カメラ映像を取得
-      await setupCamera();
-
-      // Three.jsセットアップ
-      setupThreeJS();
-
-      // 3Dモデル読み込み
-      loadModel();
-
-      // イベントリスナー設定
-      setupEventListeners();
+    function log(msg, isError = false) {
+      console.log(msg);
+      debugEl.textContent = msg;
+      if (isError) debugEl.classList.add('error');
+      else debugEl.classList.remove('error');
     }
 
-    // =========================
+    // 初期化
+    init();
+
+    async function init() {
+      try {
+        log('カメラ起動中...');
+        await setupCamera();
+        
+        log('Three.js初期化...');
+        setupThreeJS();
+        
+        log('モデル読み込み中: akane.glb');
+        await loadModel();
+        
+        setupEventListeners();
+        animate();
+        
+      } catch (err) {
+        log('エラー: ' + err.message, true);
+        console.error(err);
+      }
+    }
+
     // カメラ映像取得
-    // =========================
     async function setupCamera() {
       const video = document.getElementById('camera-video');
       
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            facingMode: 'environment', // 背面カメラ
-            width: { ideal: 1280 },
-            height: { ideal: 720 }
-          },
+          video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
           audio: false
         });
         video.srcObject = stream;
       } catch (err) {
-        console.warn('背面カメラ取得失敗、前面カメラを試行:', err);
-        try {
-          const stream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: 'user' },
-            audio: false
-          });
-          video.srcObject = stream;
-        } catch (err2) {
-          console.error('カメラ取得失敗:', err2);
-        }
+        console.warn('背面カメラ失敗:', err);
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'user' },
+          audio: false
+        });
+        video.srcObject = stream;
       }
     }
 
-    // =========================
     // Three.js セットアップ
-    // =========================
     function setupThreeJS() {
       const canvas = document.getElementById('three-canvas');
       const width = window.innerWidth;
       const height = window.innerHeight;
 
-      // シーン（背景透明）
       scene = new THREE.Scene();
 
-      // カメラ
       camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 100);
       camera.position.set(0, 1.0, 3.5);
       camera.lookAt(0, 0.9, 0);
 
-      // レンダラー（透明背景）
       renderer = new THREE.WebGLRenderer({ 
         canvas: canvas,
         antialias: true, 
@@ -288,190 +265,157 @@
       });
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
       renderer.setSize(width, height);
-      renderer.outputEncoding = THREE.sRGBEncoding;
-      renderer.setClearColor(0x000000, 0); // 完全透明
+      renderer.outputColorSpace = THREE.SRGBColorSpace;
+      renderer.setClearColor(0x000000, 0);
 
-      // ライティング
-      const ambient = new THREE.AmbientLight(0xffffff, 0.6);
+      // ライト
+      const ambient = new THREE.AmbientLight(0xffffff, 0.7);
       scene.add(ambient);
 
-      const mainLight = new THREE.DirectionalLight(0xffffff, 0.8);
+      const mainLight = new THREE.DirectionalLight(0xffffff, 1.0);
       mainLight.position.set(1, 2, 2);
       scene.add(mainLight);
 
-      const fillLight = new THREE.DirectionalLight(0x88ccff, 0.4);
+      const fillLight = new THREE.DirectionalLight(0x88ccff, 0.5);
       fillLight.position.set(-2, 1, -1);
       scene.add(fillLight);
-
-      const backLight = new THREE.DirectionalLight(0xffffee, 0.3);
-      backLight.position.set(0, 1, -2);
-      scene.add(backLight);
     }
 
-    // =========================
     // 3Dモデル読み込み
-    // =========================
     function loadModel() {
-      const loader = new THREE.GLTFLoader();
-      
-      // akane_Light.glb を読み込み（同じディレクトリに配置）
-      loader.load(
-        'akane_Light.glb',
-        function(gltf) {
-          akane = gltf.scene;
-          
-          // 位置とスケール設定（AR2.pngの位置に合わせる）
-          akane.position.set(0, -0.3, 0);
-          akane.scale.set(1.1, 1.1, 1.1);
+      return new Promise((resolve, reject) => {
+        const loader = new GLTFLoader();
+        
+        loader.load(
+          'akane.glb',
+          function(gltf) {
+            akane = gltf.scene;
+            
+            akane.position.set(0, -0.3, 0);
+            akane.scale.set(1.1, 1.1, 1.1);
 
-          // 半透明化（opacity: 0.75）
-          akane.traverse((node) => {
-            if (node.isMesh) {
-              const materials = Array.isArray(node.material) 
-                ? node.material 
-                : [node.material];
-              
-              materials.forEach(mat => {
-                mat.transparent = true;
-                mat.opacity = 0.75;
-                mat.depthWrite = true;
-              });
+            // 半透明化
+            akane.traverse((node) => {
+              if (node.isMesh) {
+                const materials = Array.isArray(node.material) ? node.material : [node.material];
+                materials.forEach(mat => {
+                  mat.transparent = true;
+                  mat.opacity = 0.75;
+                });
+              }
+            });
+
+            scene.add(akane);
+            log('モデル読み込み完了！ Yaw:0 Pitch:0');
+            resolve();
+          },
+          function(progress) {
+            if (progress.total > 0) {
+              const pct = (progress.loaded / progress.total * 100).toFixed(0);
+              log('読み込み中: ' + pct + '%');
             }
-          });
-
-          scene.add(akane);
-          console.log('モデル読み込み完了');
-        },
-        function(progress) {
-          const pct = (progress.loaded / progress.total * 100).toFixed(1);
-          console.log('読み込み中: ' + pct + '%');
-        },
-        function(error) {
-          console.error('モデル読み込みエラー:', error);
-        }
-      );
+          },
+          function(error) {
+            log('モデル読み込み失敗: ' + error.message, true);
+            reject(error);
+          }
+        );
+      });
     }
 
-    // =========================
     // イベントリスナー
-    // =========================
     function setupEventListeners() {
-      // リサイズ
       window.addEventListener('resize', onResize);
 
-      // デバイスオリエンテーション（スマホ傾き）
+      // デバイスオリエンテーション
       if (window.DeviceOrientationEvent) {
-        // iOS 13+はパーミッション必要
         if (typeof DeviceOrientationEvent.requestPermission === 'function') {
           document.body.addEventListener('click', requestOrientationPermission, { once: true });
+          log('画面をタップしてジャイロを有効化');
         } else {
           window.addEventListener('deviceorientation', onDeviceOrientation, true);
         }
       }
 
-      // マウス操作（PC用）
+      // マウス操作
       const canvas = document.getElementById('three-canvas');
-      canvas.addEventListener('mousedown', onPointerDown);
-      window.addEventListener('mousemove', onPointerMove);
-      window.addEventListener('mouseup', onPointerUp);
+      canvas.addEventListener('mousedown', (e) => {
+        isDragging = true;
+        lastX = e.clientX;
+        lastY = e.clientY;
+      });
+      window.addEventListener('mousemove', onMouseMove);
+      window.addEventListener('mouseup', () => { isDragging = false; });
 
-      // タッチ操作（スマホ用）
-      canvas.addEventListener('touchstart', onTouchStart, { passive: true });
+      // タッチ操作
+      canvas.addEventListener('touchstart', (e) => {
+        if (e.touches.length > 0) {
+          isDragging = true;
+          lastX = e.touches[0].clientX;
+          lastY = e.touches[0].clientY;
+        }
+      }, { passive: true });
       window.addEventListener('touchmove', onTouchMove, { passive: true });
-      window.addEventListener('touchend', onPointerUp);
+      window.addEventListener('touchend', () => { isDragging = false; });
 
-      // やり直すボタン（向きをリセット）
+      // やり直すボタン
       document.getElementById('retry-button').addEventListener('click', resetOrientation);
     }
 
-    // iOS向けパーミッションリクエスト
     async function requestOrientationPermission() {
       try {
         const permission = await DeviceOrientationEvent.requestPermission();
         if (permission === 'granted') {
           window.addEventListener('deviceorientation', onDeviceOrientation, true);
+          log('ジャイロ有効化完了');
         }
       } catch (err) {
-        console.error('オリエンテーションパーミッションエラー:', err);
+        log('ジャイロ権限エラー: ' + err.message, true);
       }
     }
 
-    // =========================
-    // デバイスオリエンテーション処理
-    // キャラがカメラ（端末）の方を向く
-    // =========================
+    // デバイスオリエンテーション
     function onDeviceOrientation(event) {
       if (event.beta === null || event.gamma === null) return;
 
-      // 初回の向きを基準として保存
       if (!orientationInitialized) {
         baseBeta = event.beta;
         baseGamma = event.gamma;
         orientationInitialized = true;
       }
 
-      // 基準からの差分
-      let deltaBeta = event.beta - baseBeta;   // 前後の傾き
-      let deltaGamma = event.gamma - baseGamma; // 左右の傾き
+      let deltaBeta = event.beta - baseBeta;
+      let deltaGamma = event.gamma - baseGamma;
 
-      // 感度調整
       const sensitivity = 1.2;
       
       // キャラがカメラの方を向く
-      // 端末を右に傾ける → gamma増加 → キャラは右を向く（Y軸負回転）
-      // 端末を前に傾ける → beta増加 → キャラは下を向く（X軸負回転）
       targetYaw = THREE.MathUtils.degToRad(-deltaGamma * sensitivity);
       targetPitch = THREE.MathUtils.degToRad(-deltaBeta * sensitivity * 0.5);
 
-      // 回転制限
       const maxYaw = THREE.MathUtils.degToRad(45);
       const maxPitch = THREE.MathUtils.degToRad(30);
       
       targetYaw = THREE.MathUtils.clamp(targetYaw, -maxYaw, maxYaw);
       targetPitch = THREE.MathUtils.clamp(targetPitch, -maxPitch, maxPitch);
 
-      // デバッグ表示
       updateDebug();
     }
 
-    // =========================
-    // マウス/タッチ操作
-    // =========================
-    function onPointerDown(e) {
-      isDragging = true;
-      lastX = e.clientX;
-      lastY = e.clientY;
-    }
-
-    function onTouchStart(e) {
-      if (e.touches.length > 0) {
-        isDragging = true;
-        lastX = e.touches[0].clientX;
-        lastY = e.touches[0].clientY;
-      }
-    }
-
-    function onPointerMove(e) {
+    function onMouseMove(e) {
       if (!isDragging) return;
       
-      const x = e.clientX || (e.touches && e.touches[0] ? e.touches[0].clientX : lastX);
-      const y = e.clientY || (e.touches && e.touches[0] ? e.touches[0].clientY : lastY);
-      
-      const deltaX = x - lastX;
-      const deltaY = y - lastY;
-      
-      lastX = x;
-      lastY = y;
+      const deltaX = e.clientX - lastX;
+      const deltaY = e.clientY - lastY;
+      lastX = e.clientX;
+      lastY = e.clientY;
 
-      // マウスドラッグでキャラの向きを変更
       const rotSpeed = 0.008;
       targetYaw -= deltaX * rotSpeed;
       targetPitch -= deltaY * rotSpeed * 0.5;
 
-      // 回転制限
       const maxYaw = THREE.MathUtils.degToRad(60);
       const maxPitch = THREE.MathUtils.degToRad(40);
-      
       targetYaw = THREE.MathUtils.clamp(targetYaw, -maxYaw, maxYaw);
       targetPitch = THREE.MathUtils.clamp(targetPitch, -maxPitch, maxPitch);
 
@@ -483,10 +427,8 @@
       
       const x = e.touches[0].clientX;
       const y = e.touches[0].clientY;
-      
       const deltaX = x - lastX;
       const deltaY = y - lastY;
-      
       lastX = x;
       lastY = y;
 
@@ -496,65 +438,45 @@
 
       const maxYaw = THREE.MathUtils.degToRad(60);
       const maxPitch = THREE.MathUtils.degToRad(40);
-      
       targetYaw = THREE.MathUtils.clamp(targetYaw, -maxYaw, maxYaw);
       targetPitch = THREE.MathUtils.clamp(targetPitch, -maxPitch, maxPitch);
 
       updateDebug();
     }
 
-    function onPointerUp() {
-      isDragging = false;
-    }
-
-    // =========================
-    // 向きリセット
-    // =========================
     function resetOrientation() {
       targetYaw = 0;
       targetPitch = 0;
       baseBeta = null;
       baseGamma = null;
       orientationInitialized = false;
-      updateDebug();
+      log('リセット完了 Yaw:0 Pitch:0');
     }
 
-    // =========================
-    // リサイズ処理
-    // =========================
     function onResize() {
       const width = window.innerWidth;
       const height = window.innerHeight;
-      
       camera.aspect = width / height;
       camera.updateProjectionMatrix();
       renderer.setSize(width, height);
     }
 
-    // =========================
-    // デバッグ表示更新
-    // =========================
     function updateDebug() {
       const yawDeg = THREE.MathUtils.radToDeg(targetYaw).toFixed(1);
       const pitchDeg = THREE.MathUtils.radToDeg(targetPitch).toFixed(1);
-      
-      document.getElementById('dbg-yaw').textContent = yawDeg;
-      document.getElementById('dbg-pitch').textContent = pitchDeg;
+      log('Yaw:' + yawDeg + '° Pitch:' + pitchDeg + '°');
     }
 
-    // =========================
     // アニメーションループ
-    // =========================
     function animate() {
       requestAnimationFrame(animate);
 
       if (akane) {
-        // スムーズに補間
         const lerpFactor = 0.1;
         currentYaw += (targetYaw - currentYaw) * lerpFactor;
         currentPitch += (targetPitch - currentPitch) * lerpFactor;
 
-        // 回転適用（Z軸=0で直立維持）
+        // Z軸=0で直立維持
         akane.rotation.set(currentPitch, currentYaw, 0);
       }
 
