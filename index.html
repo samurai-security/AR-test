@@ -3,81 +3,85 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>AR Avatar Chat - claude013</title>
+    <title>AR Avatar Chat</title>
     
     <script src="https://aframe.io/releases/1.2.0/aframe.min.js"></script>
     <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
 
     <style>
         body { margin: 0; overflow: hidden; font-family: sans-serif; }
+        
         #ui-layer {
             position: absolute; bottom: 0; left: 0; width: 100%; height: 30%;
-            pointer-events: none; display: flex; flex-direction: column; justify-content: flex-end; z-index: 10;
+            pointer-events: none; z-index: 10;
+            display: flex; justify-content: center; align-items: flex-end;
+            padding-bottom: 20px;
         }
         .chat-container {
-            width: 90%; margin: 0 auto 20px auto;
-            background: rgba(0, 0, 0, 0.6);
-            border: 2px solid #00ffff; border-radius: 10px; padding: 15px;
-            pointer-events: auto; box-sizing: border-box; color: #fff;
+            width: 90%; background: rgba(0, 0, 0, 0.6);
+            border: 2px solid #00ffff; border-radius: 10px;
+            padding: 15px; color: #fff; pointer-events: auto;
+            box-sizing: border-box;
         }
         .speaker-name { font-size: 14px; font-weight: bold; color: #00ffff; margin-bottom: 5px; }
-        .message-text { font-size: 16px; line-height: 1.4; text-shadow: 1px 1px 2px black; }
+        .message-text { font-size: 16px; line-height: 1.4; }
     </style>
 
     <script>
-        AFRAME.registerComponent("billboard-follow-camera", {
-            init: function () {
-                // カメラ取得
-                this.cameraEl = document.querySelector("#mainCamera") || document.querySelector("[camera]");
-                this.camera = this.cameraEl ? this.cameraEl.object3D : null;
-                
-                // 座標用ベクトル
-                this.camPos = new THREE.Vector3();
-                this.modelPos = new THREE.Vector3();
-                
-                // GLTFメッシュ
-                this.mesh = null;
-                
-                // モデル読み込み完了後
-                this.el.addEventListener("model-loaded", () => {
-                    this.mesh = this.el.getObject3D("mesh");
-                    console.log("Model loaded");
-                });
+        // 【Ver: Gemini002】兄弟構造・完全水平追従
+        // カメラの子要素にはせず、スクリプトで「カメラの水平前方」に位置を合わせる。
+        // これにより、物理的な位置固定と、重力維持（直立）を両立する。
+        AFRAME.registerComponent('world-lock-billboard', {
+            init: function() {
+                this.camera = document.querySelector('[camera]');
+                // 距離設定（3.5m先に表示）
+                this.distance = 3.5;
             },
 
             tick: function () {
-                // 安全チェック
                 if (!this.camera) return;
-                if (!this.mesh) return;
+
+                var camObj = this.camera.object3D;
+                var modelObj = this.el.object3D;
+
+                // --------------------------------------------------------
+                // 1. 位置の計算：カメラの「水平方向の前」に移動
+                // --------------------------------------------------------
+                var camPos = new THREE.Vector3();
+                camObj.getWorldPosition(camPos);
+
+                var camDir = new THREE.Vector3();
+                camObj.getWorldDirection(camDir);
                 
-                // カメラのワールド座標
-                this.camera.getWorldPosition(this.camPos);
+                // Y成分（上下の向き）を捨てて、水平ベクトルにする
+                // これにより、カメラが上を向いても、モデルは空に上がっていかない
+                camDir.y = 0; 
+                camDir.normalize();
+
+                // カメラの位置から、水平方向に distance 分進んだ位置を決定
+                var targetPos = new THREE.Vector3();
+                targetPos.copy(camPos).add(camDir.multiplyScalar(this.distance));
                 
-                // ★修正: エンティティ（this.el.object3D）のワールド座標を使用
-                this.el.object3D.getWorldPosition(this.modelPos);
-                
-                // 方向ベクトル
-                const dx = this.camPos.x - this.modelPos.x;
-                const dy = this.camPos.y - this.modelPos.y;
-                const dz = this.camPos.z - this.modelPos.z;
-                
-                // Y軸回転（ヨー）
-                const yaw = Math.atan2(dx, dz);
-                
-                // X軸回転（ピッチ）
-                const horizontal = Math.sqrt(dx * dx + dz * dz);
-                const pitch = Math.atan2(dy, horizontal) * -1;
-                
-                // ★修正: メッシュに回転を適用
-                this.mesh.rotation.set(pitch, yaw, 0);
+                // 高さはカメラの高さから -1.3m 下げる（全身を入れるため）
+                targetPos.y = camPos.y - 1.3;
+
+                // 位置を適用
+                modelObj.position.copy(targetPos);
+
+                // --------------------------------------------------------
+                // 2. 回転の計算：垂直を保ったままカメラを見る
+                // --------------------------------------------------------
+                // 「カメラのX,Z座標」と「モデル自身のY座標」を見ることで
+                // 首を横に振る（Yaw）だけでカメラの方を向く
+                // Pitch(上下)やRoll(傾き)は発生しない
+                modelObj.lookAt(camPos.x, modelObj.position.y, camPos.z);
             }
         });
 
+        // 半透明化
         AFRAME.registerComponent('model-opacity', {
             schema: { default: 0.7 },
-            init: function () { 
-                this.el.addEventListener('model-loaded', this.update.bind(this)); 
-            },
+            init: function () { this.el.addEventListener('model-loaded', this.update.bind(this)); },
             update: function () {
                 var mesh = this.el.getObject3D('mesh');
                 var data = this.data;
@@ -96,10 +100,11 @@
 <body>
     <div id="ui-layer">
         <div class="chat-container">
-            <div class="speaker-name">AKANE - claude013</div>
+            <div class="speaker-name">AKANE (Gemini002)</div>
             <div class="message-text">
-                みなさんこんにちは。わたしはAIコンシェルジュのあかねです。<br>
-                お金の使い方などを考える「終活AI」として、みなさんの人生設計をサポートします。
+                バージョン管理を修正しました。<br>
+                ・位置：カメラの水平前方（子要素ではない）<br>
+                ・回転：Y軸のみでカメラを向く
             </div>
         </div>
     </div>
@@ -107,20 +112,23 @@
     <a-scene 
         embedded 
         arjs="sourceType: webcam; debugUIEnabled: false;"
-        vr-mode-ui="enabled: false">
+        vr-mode-ui="enabled: false"
+        renderer="logarithmicDepthBuffer: true;">
 
         <a-assets>
             <a-asset-item id="akane-model" src="akane.glb"></a-asset-item>
         </a-assets>
 
-        <a-camera id="mainCamera" look-controls></a-camera>
+        <a-entity camera look-controls></a-entity>
 
         <a-entity 
-            gltf-model="#akane-model" 
-            position="0 -0.8 -2.5"
-            scale="1.5 1.5 1.5"
-            model-opacity="0.7"
-            billboard-follow-camera>
+            world-lock-billboard
+            model-opacity="0.7">
+            
+            <a-entity 
+                gltf-model="#akane-model" 
+                scale="1.8 1.8 1.8">
+            </a-entity>
         </a-entity>
 
     </a-scene>
