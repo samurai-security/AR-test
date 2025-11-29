@@ -11,7 +11,6 @@
     <style>
         body { margin: 0; overflow: hidden; font-family: sans-serif; }
         
-        /* UIレイヤー */
         #ui-layer {
             position: absolute; bottom: 0; left: 0; width: 100%; height: 30%;
             pointer-events: none; display: flex; flex-direction: column; justify-content: flex-end; z-index: 10;
@@ -27,30 +26,31 @@
     </style>
 
     <script>
-        // 【決定版】ゴンドラ制御システム
-        // カメラの「横回転(Y)」と「位置」だけをコピーする
-        // 数学的なベクトル計算を使わないため、バグで消えることがない
-        AFRAME.registerComponent('camera-yaw-lock', {
-            init: function () {
-                this.camera = document.querySelector('[camera]');
-            },
+        // 【最終決定版】Smart Gravity Billboard
+        // キャラクターをカメラの子要素（位置固定）にした状態で、
+        // 毎フレーム「重力に対して垂直になるよう」回転だけを強制補正する
+        AFRAME.registerComponent('smart-billboard', {
             tick: function () {
-                if (!this.camera) return;
+                var camera = this.el.sceneEl.camera;
+                if (!camera) return;
 
-                var rig = this.el.object3D;
-                var cam = this.camera.object3D;
+                // 1. ターゲット（カメラ）のワールド座標を取得
+                var targetPos = new THREE.Vector3();
+                camera.getWorldPosition(targetPos);
 
-                // 1. 位置をカメラと完全に同期させる
-                rig.position.copy(cam.position);
+                // 2. 自分（キャラ）のワールド座標を取得
+                var myPos = new THREE.Vector3();
+                this.el.object3D.getWorldPosition(myPos);
 
-                // 2. 回転を同期させるが、少し工夫する
-                // カメラの回転情報（クォータニオン）から、Y軸（水平）の角度だけを抽出する
-                var camEuler = new THREE.Euler();
-                camEuler.setFromQuaternion(cam.quaternion, 'YXZ');
+                // 3. 高さを自分に合わせて「水平」にする
+                // これにより、カメラが上にあろうが下にあろうが、
+                // 「同じ高さにあるカメラ」を見るように回転するため、直立が保たれる
+                targetPos.y = myPos.y;
 
-                // 3. ゴンドラの回転をセット（XとZは0に固定＝水平維持）
-                // これにより、スマホを傾けてもキャラクターは直立不動になる
-                rig.rotation.set(0, camEuler.y, 0);
+                // 4. その方向を見る
+                // A-Frame(Three.js)の lookAt は親要素の回転を考慮して
+                // 自動的に逆算してくれるため、これで「カメラの傾き」が打ち消される
+                this.el.object3D.lookAt(targetPos);
             }
         });
 
@@ -78,9 +78,9 @@
         <div class="chat-container">
             <div class="speaker-name">AKANE</div>
             <div class="message-text">
-                お待たせしました！<br>
-                今度こそ消えません。<br>
-                上や下を向くと、アングルが変わりますよ。
+                これで解決です。<br>
+                私はカメラにくっついているので位置はずれません。<br>
+                でも、回転制御で常にまっすぐ立っています。
             </div>
         </div>
     </div>
@@ -94,15 +94,14 @@
             <a-asset-item id="akane-model" src="akane.glb"></a-asset-item>
         </a-assets>
 
-        <a-entity camera look-controls></a-entity>
-
-        <a-entity camera-yaw-lock>
+        <a-entity camera look-controls>
             
             <a-entity 
                 gltf-model="#akane-model" 
                 position="0 -1.6 -3.5"
                 scale="1.8 1.8 1.8"
-                model-opacity="0.7">
+                model-opacity="0.7"
+                smart-billboard>
             </a-entity>
 
         </a-entity>
