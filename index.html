@@ -22,50 +22,51 @@
         }
         .speaker-name { font-size: 14px; font-weight: bold; color: #00ffff; margin-bottom: 5px; }
         .message-text { font-size: 16px; line-height: 1.4; text-shadow: 1px 1px 2px black; }
-        #debug {
-            position: absolute; top: 10px; left: 10px; color: #0f0; font-family: monospace;
-            background: rgba(0,0,0,0.7); padding: 10px; font-size: 12px; z-index: 100;
-        }
     </style>
 
     <script>
-        AFRAME.registerComponent('simple-billboard', {
+        // 【最終修正版】親回転キャンセル型ビルボード
+        // カメラの子要素であっても、ワールド空間の「重力」と「カメラ方向」を正しく向くための
+        // 補正回転（Local Quaternion）を毎フレーム計算する
+        AFRAME.registerComponent('stabilized-billboard', {
+            init: function() {
+                // 計算用の変数を事前に作っておく（メモリ負荷軽減）
+                this.dummy = new THREE.Object3D();
+                this.myWorldPos = new THREE.Vector3();
+                this.camWorldPos = new THREE.Vector3();
+                this.parentWorldQuat = new THREE.Quaternion();
+            },
+
             tick: function () {
+                var el = this.el;
                 var camera = this.el.sceneEl.camera;
-                if (!camera) {
-                    console.log("No camera found");
-                    return;
-                }
-
-                var cameraPos = new THREE.Vector3();
-                var characterPos = new THREE.Vector3();
-                camera.getWorldPosition(cameraPos);
-                this.el.object3D.getWorldPosition(characterPos);
-
-                // デバッグ出力
-                var debugEl = document.getElementById('debug');
-                if (debugEl) {
-                    debugEl.innerHTML = 
-                        'Camera: ' + cameraPos.x.toFixed(2) + ', ' + cameraPos.y.toFixed(2) + ', ' + cameraPos.z.toFixed(2) + '<br>' +
-                        'Character: ' + characterPos.x.toFixed(2) + ', ' + characterPos.y.toFixed(2) + ', ' + characterPos.z.toFixed(2);
-                }
-
-                // 方向ベクトルを計算
-                var direction = new THREE.Vector3().subVectors(cameraPos, characterPos).normalize();
-
-                // Y軸回転（ヨー）- 左右
-                var yaw = Math.atan2(direction.x, direction.z);
-
-                // X軸回転（ピッチ）- 上下
-                var pitch = Math.asin(-direction.y);
-
-                // Z軸回転（ロール）- 0固定で傾かない
-                this.el.object3D.rotation.set(pitch, yaw, 0);
                 
-                console.log("Rotation - Pitch:", (pitch * 180 / Math.PI).toFixed(1), "Yaw:", (yaw * 180 / Math.PI).toFixed(1));
+                if (!camera) return;
+
+                // 1. ワールド座標を取得（自分とカメラ）
+                el.object3D.getWorldPosition(this.myWorldPos);
+                camera.getWorldPosition(this.camWorldPos);
+
+                // 2. 「理想の向き」をダミーオブジェクトで計算
+                // ダミーを自分の場所に置き、カメラの方（ただし高さは自分と同じ高さ）を向かせる
+                // これにより「垂直」かつ「カメラ目線」の回転データが作られる
+                this.dummy.position.copy(this.myWorldPos);
+                this.dummy.lookAt(this.camWorldPos.x, this.myWorldPos.y, this.camWorldPos.z);
+
+                // 3. 親（カメラ）の回転を取得し、逆回転を作る
+                el.object3D.parent.getWorldQuaternion(this.parentWorldQuat);
+                this.parentWorldQuat.invert();
+
+                // 4. 計算： ローカル回転 ＝ 親の逆回転 × 理想のワールド回転
+                // これで、親が傾いていても打ち消され、理想の向きだけが残る
+                this.parentWorldQuat.multiply(this.dummy.quaternion);
+
+                // 5. 適用
+                el.object3D.quaternion.copy(this.parentWorldQuat);
             }
         });
 
+        // 半透明機能
         AFRAME.registerComponent('model-opacity', {
             schema: { default: 0.7 },
             init: function () { this.el.addEventListener('model-loaded', this.update.bind(this)); },
@@ -85,14 +86,13 @@
 </head>
 
 <body>
-    <div id="debug">Loading...</div>
-    
     <div id="ui-layer">
         <div class="chat-container">
             <div class="speaker-name">AKANE</div>
             <div class="message-text">
-                みなさんこんにちは。わたしはAIコンシェルジュのあかねです。<br>
-                お金の使い方などを考える「終活AI」として、みなさんの人生設計をサポートします。
+                修正完了しました。<br>
+                座標は固定、かつ重力に従って直立します。<br>
+                上を向けばアゴが見える挙動になっています。
             </div>
         </div>
     </div>
@@ -106,15 +106,16 @@
             <a-asset-item id="akane-model" src="akane.glb"></a-asset-item>
         </a-assets>
 
-        <a-camera look-controls></a-camera>
+        <a-entity camera look-controls>
+            
+            <a-entity 
+                gltf-model="#akane-model" 
+                position="0 -1.3 -3.5"
+                scale="1.8 1.8 1.8"
+                model-opacity="0.7"
+                stabilized-billboard>
+            </a-entity>
 
-        <!-- 位置を調整: Y=0で画面中央、Y=-1だと下部になる -->
-        <a-entity 
-            gltf-model="#akane-model" 
-            position="0 0 -3.5"
-            scale="1.8 1.8 1.8"
-            model-opacity="0.7"
-            simple-billboard>
         </a-entity>
 
     </a-scene>
