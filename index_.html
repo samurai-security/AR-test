@@ -22,50 +22,45 @@
         }
         .speaker-name { font-size: 14px; font-weight: bold; color: #00ffff; margin-bottom: 5px; }
         .message-text { font-size: 16px; line-height: 1.4; text-shadow: 1px 1px 2px black; }
+        #debug {
+            position: absolute; top: 10px; left: 10px; color: #0f0; font-family: monospace;
+            background: rgba(0,0,0,0.7); padding: 10px; font-size: 12px; z-index: 100;
+        }
     </style>
 
     <script>
-        // 【修正完了版】カメラの子要素配置 ＋ 垂直維持ビルボード
-        AFRAME.registerComponent('vertical-fixed-billboard', {
+        AFRAME.registerComponent('simple-billboard', {
             tick: function () {
                 var camera = this.el.sceneEl.camera;
-                if (!camera) return;
+                if (!camera) {
+                    console.log("No camera found");
+                    return;
+                }
 
-                // 1. ワールド座標を取得
                 var cameraPos = new THREE.Vector3();
                 var characterPos = new THREE.Vector3();
                 camera.getWorldPosition(cameraPos);
                 this.el.object3D.getWorldPosition(characterPos);
 
-                // 2. カメラへの方向ベクトルを計算
-                var direction = new THREE.Vector3().subVectors(cameraPos, characterPos).normalize();
+                // デバッグ出力
+                var debugEl = document.getElementById('debug');
+                if (debugEl) {
+                    debugEl.innerHTML = 
+                        'Camera: ' + cameraPos.x.toFixed(2) + ', ' + cameraPos.y.toFixed(2) + ', ' + cameraPos.z.toFixed(2) + '<br>' +
+                        'Character: ' + characterPos.x.toFixed(2) + ', ' + characterPos.y.toFixed(2) + ', ' + characterPos.z.toFixed(2);
+                }
 
-                // 3. Y軸回転（ヨー）のみ計算 - これで左右だけ向く
-                var yaw = Math.atan2(direction.x, direction.z);
+                // Y軸回転のみ
+                var dx = cameraPos.x - characterPos.x;
+                var dz = cameraPos.z - characterPos.z;
+                var angle = Math.atan2(dx, dz);
 
-                // ★重要修正★ 
-                // X軸回転（ピッチ）は「0」に固定する！
-                // これにより、カメラが高い位置にあろうが低い位置にあろうが
-                // キャラクターは「直立」を保つため、ローアングル/ハイアングルが表現される
-                var pitch = 0; 
-
-                // 4. 目標のワールド回転を作成（垂直固定・左右追従）
-                var targetWorldQuat = new THREE.Quaternion().setFromEuler(
-                    new THREE.Euler(pitch, yaw, 0, 'YXZ')
-                );
+                this.el.object3D.rotation.set(0, angle, 0);
                 
-                // 5. ローカル回転に変換して適用
-                var cameraQuat = new THREE.Quaternion();
-                camera.getWorldQuaternion(cameraQuat);
-                
-                var inverseCameraQuat = cameraQuat.clone().invert();
-                var localQuat = inverseCameraQuat.multiply(targetWorldQuat);
-                
-                this.el.object3D.quaternion.copy(localQuat);
+                console.log("Rotation angle:", angle * 180 / Math.PI);
             }
         });
 
-        // 半透明機能
         AFRAME.registerComponent('model-opacity', {
             schema: { default: 0.7 },
             init: function () { this.el.addEventListener('model-loaded', this.update.bind(this)); },
@@ -85,13 +80,14 @@
 </head>
 
 <body>
+    <div id="debug">Loading...</div>
+    
     <div id="ui-layer">
         <div class="chat-container">
             <div class="speaker-name">AKANE</div>
             <div class="message-text">
-                設定完了です。<br>
-                これで位置は固定されたまま、<br>
-                上を見ればアゴが見える「正しい挙動」になります。
+                デバッグモードです。<br>
+                画面左上に座標情報が表示されます。
             </div>
         </div>
     </div>
@@ -105,16 +101,14 @@
             <a-asset-item id="akane-model" src="akane.glb"></a-asset-item>
         </a-assets>
 
-        <a-entity camera look-controls>
-            
-            <a-entity 
-                gltf-model="#akane-model" 
-                position="0 -1.3 -3.5"
-                scale="1.8 1.8 1.8"
-                model-opacity="0.7"
-                vertical-fixed-billboard>
-            </a-entity>
+        <a-camera look-controls></a-camera>
 
+        <a-entity 
+            gltf-model="#akane-model" 
+            position="0 0 -3.5"
+            scale="1.8 1.8 1.8"
+            model-opacity="0.7"
+            simple-billboard>
         </a-entity>
 
     </a-scene>
