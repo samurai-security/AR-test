@@ -3,105 +3,71 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>AR Avatar Chat - claude004</title>
+    <title>AR Avatar Chat</title>
     
     <script src="https://aframe.io/releases/1.2.0/aframe.min.js"></script>
     <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
 
     <style>
-        body { margin: 0; overflow: hidden; font-family: sans-serif; }
+        body { margin: 0; overflow: hidden; font-family: "Helvetica Neue", Arial, sans-serif; }
+
+        /* UIレイヤー */
         #ui-layer {
-            position: absolute; bottom: 0; left: 0; width: 100%; height: 30%;
-            pointer-events: none; display: flex; flex-direction: column; justify-content: flex-end; z-index: 10;
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 30%;
+            pointer-events: none;
+            z-index: 10;
+            display: flex;
+            justify-content: center;
+            align-items: flex-end;
+            padding-bottom: 20px;
         }
-        .chat-container {
-            width: 90%; margin: 0 auto 20px auto;
+
+        .chat-box {
+            position: relative;
+            width: 90%;
             background: rgba(0, 0, 0, 0.6);
-            border: 2px solid #00ffff; border-radius: 10px; padding: 15px;
-            pointer-events: auto; box-sizing: border-box; color: #fff;
+            border: 2px solid #00ffff;
+            border-radius: 10px;
+            box-sizing: border-box;
+            padding: 15px;
+            color: #fff;
+            pointer-events: auto;
         }
-        .speaker-name { font-size: 14px; font-weight: bold; color: #00ffff; margin-bottom: 5px; }
-        .message-text { font-size: 16px; line-height: 1.4; text-shadow: 1px 1px 2px black; }
+
+        .name-label {
+            font-size: 14px;
+            color: #00ffff;
+            font-weight: bold;
+            margin-bottom: 6px;
+        }
+
+        .message-content {
+            font-size: 16px;
+            line-height: 1.4;
+        }
     </style>
 
     <script>
-        // claude004 - カメラの方を向くビルボード（XY回転のみ、Z軸固定）
-        AFRAME.registerComponent('billboard', {
+        // 【Ver: Gemini003】重力維持スタビライザー
+        // 位置はカメラの子要素(XY固定) + 回転は重力維持(Pitch/Rollキャンセル)
+        AFRAME.registerComponent('gravity-fix', {
             tick: function () {
+                var el = this.el;
                 var camera = this.el.sceneEl.camera;
+                
                 if (!camera) return;
 
-                var cameraPos = new THREE.Vector3();
-                var characterPos = new THREE.Vector3();
-                camera.getWorldPosition(cameraPos);
-                this.el.object3D.getWorldPosition(characterPos);
+                // 1. カメラ（親）のワールド回転を取得
+                var camQuat = new THREE.Quaternion();
+                camera.getWorldQuaternion(camQuat);
 
-                // カメラへの方向ベクトルを計算
-                var direction = new THREE.Vector3().subVectors(cameraPos, characterPos).normalize();
-
-                // Y軸回転（左右）
-                var yaw = Math.atan2(direction.x, direction.z);
-
-                // X軸回転（上下）
-                var pitch = Math.asin(-direction.y);
-
-                // Z軸は0固定（直立維持）
-                this.el.object3D.rotation.set(pitch, yaw, 0);
-            }
-        });
-
-        // 半透明機能
-        AFRAME.registerComponent('model-opacity', {
-            schema: { default: 0.7 },
-            init: function () { 
-                this.el.addEventListener('model-loaded', this.update.bind(this)); 
-            },
-            update: function () {
-                var mesh = this.el.getObject3D('mesh');
-                var data = this.data;
-                if (!mesh) return;
-                mesh.traverse(function (node) {
-                    if (node.isMesh) {
-                        node.material.transparent = true;
-                        node.material.opacity = data;
-                    }
-                });
-            }
-        });
-    </script>
-</head>
-
-<body>
-    <div id="ui-layer">
-        <div class="chat-container">
-            <div class="speaker-name">AKANE - claude004</div>
-            <div class="message-text">
-                みなさんこんにちは。わたしはAIコンシェルジュのあかねです。<br>
-                お金の使い方などを考える「終活AI」として、みなさんの人生設計をサポートします。
-            </div>
-        </div>
-    </div>
-
-    <a-scene 
-        embedded 
-        arjs="sourceType: webcam; debugUIEnabled: false;"
-        vr-mode-ui="enabled: false">
-
-        <a-assets>
-            <a-asset-item id="akane-model" src="akane.glb"></a-asset-item>
-        </a-assets>
-
-        <a-camera look-controls></a-camera>
-
-        <!-- シーン直下に配置：ワールド座標で固定 -->
-        <a-entity 
-            gltf-model="#akane-model" 
-            position="0 0 -2.5"
-            scale="1.5 1.5 1.5"
-            model-opacity="0.7"
-            billboard>
-        </a-entity>
-
-    </a-scene>
-</body>
-</html>
+                // 2. 「水平方向（Yaw）」成分だけ抽出
+                var euler = new THREE.Euler().setFromQuaternion(camQuat, 'YXZ');
+                
+                // 3. 目標回転：水平方向はカメラと同じだが、上下(Pitch)と傾き(Roll)はゼロ
+                //    これにより「直立」かつ「カメラの方角を向く」状態を作る
+                var targetQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler
