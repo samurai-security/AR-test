@@ -25,16 +25,14 @@
     </style>
 
     <script>
-        // 【最終修正版】親回転キャンセル型ビルボード
-        // カメラの子要素であっても、ワールド空間の「重力」と「カメラ方向」を正しく向くための
-        // 補正回転（Local Quaternion）を毎フレーム計算する
+        // 【完全修正版】XY回転対応 + Z回転禁止ビルボード
         AFRAME.registerComponent('stabilized-billboard', {
             init: function() {
-                // 計算用の変数を事前に作っておく（メモリ負荷軽減）
-                this.dummy = new THREE.Object3D();
                 this.myWorldPos = new THREE.Vector3();
                 this.camWorldPos = new THREE.Vector3();
                 this.parentWorldQuat = new THREE.Quaternion();
+                this.targetWorldQuat = new THREE.Quaternion();
+                this.direction = new THREE.Vector3();
             },
 
             tick: function () {
@@ -43,25 +41,28 @@
                 
                 if (!camera) return;
 
-                // 1. ワールド座標を取得（自分とカメラ）
+                // 1. ワールド座標を取得
                 el.object3D.getWorldPosition(this.myWorldPos);
                 camera.getWorldPosition(this.camWorldPos);
 
-                // 2. 「理想の向き」をダミーオブジェクトで計算
-                // ダミーを自分の場所に置き、カメラの方（ただし高さは自分と同じ高さ）を向かせる
-                // これにより「垂直」かつ「カメラ目線」の回転データが作られる
-                this.dummy.position.copy(this.myWorldPos);
-                this.dummy.lookAt(this.camWorldPos.x, this.myWorldPos.y, this.camWorldPos.z);
+                // 2. 方向ベクトルを計算
+                this.direction.subVectors(this.camWorldPos, this.myWorldPos).normalize();
 
-                // 3. 親（カメラ）の回転を取得し、逆回転を作る
+                // 3. Y軸回転（ヨー）とX軸回転（ピッチ）を計算
+                var yaw = Math.atan2(this.direction.x, this.direction.z);
+                var pitch = Math.asin(-this.direction.y);
+
+                // 4. 目標のワールド回転を作成（Z軸=0で傾かない）
+                this.targetWorldQuat.setFromEuler(new THREE.Euler(pitch, yaw, 0, 'YXZ'));
+
+                // 5. 親の回転を取得して逆回転を作る
                 el.object3D.parent.getWorldQuaternion(this.parentWorldQuat);
                 this.parentWorldQuat.invert();
 
-                // 4. 計算： ローカル回転 ＝ 親の逆回転 × 理想のワールド回転
-                // これで、親が傾いていても打ち消され、理想の向きだけが残る
-                this.parentWorldQuat.multiply(this.dummy.quaternion);
+                // 6. ローカル回転 = 親の逆回転 × 目標のワールド回転
+                this.parentWorldQuat.multiply(this.targetWorldQuat);
 
-                // 5. 適用
+                // 7. 適用
                 el.object3D.quaternion.copy(this.parentWorldQuat);
             }
         });
@@ -90,9 +91,8 @@
         <div class="chat-container">
             <div class="speaker-name">AKANE</div>
             <div class="message-text">
-                修正完了しました。<br>
-                座標は固定、かつ重力に従って直立します。<br>
-                上を向けばアゴが見える挙動になっています。
+                みなさんこんにちは。わたしはAIコンシェルジュのあかねです。<br>
+                お金の使い方などを考える「終活AI」として、みなさんの人生設計をサポートします。
             </div>
         </div>
     </div>
@@ -110,7 +110,7 @@
             
             <a-entity 
                 gltf-model="#akane-model" 
-                position="0 -1.3 -3.5"
+                position="0 -1 -3.5"
                 scale="1.8 1.8 1.8"
                 model-opacity="0.7"
                 stabilized-billboard>
