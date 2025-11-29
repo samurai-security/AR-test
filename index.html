@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>AR Avatar Chat - claude011</title>
+    <title>AR Avatar Chat - claude012</title>
     
     <script src="https://aframe.io/releases/1.2.0/aframe.min.js"></script>
     <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
@@ -27,36 +27,47 @@
     <script>
         AFRAME.registerComponent("billboard-follow-camera", {
             init: function () {
-                this.cameraEl = document.querySelector("#mainCamera") || document.querySelector("[camera]") || null;
+                // カメラ取得（フォールバック付き）
+                this.cameraEl = document.querySelector("#mainCamera") || document.querySelector("[camera]");
                 this.camera = this.cameraEl ? this.cameraEl.object3D : null;
+                
+                // 座標用ベクトル（メモリ効率）
                 this.camPos = new THREE.Vector3();
-                this.objPos = new THREE.Vector3();
+                this.modelPos = new THREE.Vector3();
+                
+                // GLTFメッシュ
                 this.mesh = null;
                 
+                // モデル読み込み完了後にメッシュ取得
                 this.el.addEventListener("model-loaded", () => {
                     this.mesh = this.el.getObject3D("mesh");
+                    console.log("Model loaded, mesh:", this.mesh);
                 });
             },
 
             tick: function () {
+                // 安全チェック
                 if (!this.camera) return;
                 if (!this.mesh) return;
-                if (!this.mesh.position) return;
-
-                const model = this.mesh;
-
+                
+                // カメラとモデルのワールド座標を取得
                 this.camera.getWorldPosition(this.camPos);
-                model.getWorldPosition(this.objPos);
-
-                const dx = this.camPos.x - this.objPos.x;
-                const dy = this.camPos.y - this.objPos.y;
-                const dz = this.camPos.z - this.objPos.z;
-
+                this.mesh.getWorldPosition(this.modelPos);
+                
+                // 方向ベクトルの成分
+                const dx = this.camPos.x - this.modelPos.x;
+                const dy = this.camPos.y - this.modelPos.y;
+                const dz = this.camPos.z - this.modelPos.z;
+                
+                // Y軸回転（ヨー）- 左右の向き
                 const yaw = Math.atan2(dx, dz);
+                
+                // X軸回転（ピッチ）- 上下の向き
                 const horizontal = Math.sqrt(dx * dx + dz * dz);
                 const pitch = Math.atan2(dy, horizontal) * -1;
-
-                model.rotation.set(pitch, yaw, 0);
+                
+                // 回転適用（Z軸=0で直立維持）
+                this.mesh.rotation.set(pitch, yaw, 0);
             }
         });
 
@@ -83,7 +94,7 @@
 <body>
     <div id="ui-layer">
         <div class="chat-container">
-            <div class="speaker-name">AKANE - claude011</div>
+            <div class="speaker-name">AKANE - claude012</div>
             <div class="message-text">
                 みなさんこんにちは。わたしはAIコンシェルジュのあかねです。<br>
                 お金の使い方などを考える「終活AI」として、みなさんの人生設計をサポートします。
