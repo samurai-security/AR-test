@@ -26,32 +26,62 @@
     </style>
 
     <script>
-        // 【正解版】XY回転対応、Z軸（ロール）のみ禁止のビルボード
-        AFRAME.registerComponent('no-roll-billboard', {
-            tick: function () {
-                var camera = this.el.sceneEl.camera;
-                if (!camera) return;
+        // 設定：ここをいじるだけで微調整できます
+        const SETTINGS = {
+            distance: 3.5,     // ★距離：近いと大きく、遠いと小さく見える
+            heightOffset: -1.3, // ★高さ：プラスだと浮き、マイナスだと沈む
+            followSpeed: 0.15   // ★追従速度：1.0で瞬時に追従、0.1でヌルっと追従
+        };
 
-                var cameraPos = new THREE.Vector3();
-                var characterPos = new THREE.Vector3();
-                camera.getWorldPosition(cameraPos);
-                this.el.object3D.getWorldPosition(characterPos);
+        // 【最終仕様対応】水平維持・ジャイロ追従システム
+        AFRAME.registerComponent('horizontal-tray', {
+            init: function() {
+                this.camera = document.querySelector('[camera]');
+                this.targetPos = new THREE.Vector3(); // 計算用
+            },
 
-                // 方向ベクトルを計算
-                var direction = new THREE.Vector3().subVectors(cameraPos, characterPos).normalize();
+            tick: function (time, timeDelta) {
+                if (!this.camera) return;
 
-                // Y軸回転（ヨー）を計算
-                var yaw = Math.atan2(direction.x, direction.z);
+                const camObj = this.camera.object3D;
+                const modelObj = this.el.object3D;
 
-                // X軸回転（ピッチ）を計算
-                var pitch = Math.asin(-direction.y);
+                // ---------------------------------------------------------
+                // 1. 【要件：位置固定】ユーザーの「水平方向の正面」を計算する
+                // ---------------------------------------------------------
+                // カメラが今どこを向いているか取得
+                const direction = new THREE.Vector3();
+                camObj.getWorldDirection(direction);
 
-                // Z軸回転（ロール）は0に固定
-                this.el.object3D.rotation.set(pitch, yaw, 0);
+                // ★重要★ 上下の傾き（Y成分）を強制的にゼロにする
+                // これにより、空を見上げても「空」に移動せず、「水平線上の正面」に留まる
+                direction.y = 0;
+                direction.normalize(); // 長さを整える
+
+                // 「カメラの位置」から「水平方向」へ「指定距離」進んだ場所を計算
+                this.targetPos.copy(camObj.position).add(direction.multiplyScalar(SETTINGS.distance));
+
+                // 高さはカメラの高さ＋オフセットで固定（上下動の抑制）
+                // ※これにより「Y方向に傾けるとアゴが見える」挙動になる
+                this.targetPos.y = camObj.position.y + SETTINGS.heightOffset;
+
+                // ---------------------------------------------------------
+                // 2. 【要件：座標固定】スムーズに移動（ガタつき防止）
+                // ---------------------------------------------------------
+                // 現在位置から目標位置まで少しずつ移動させる（Lerp）
+                modelObj.position.lerp(this.targetPos, SETTINGS.followSpeed);
+
+                // ---------------------------------------------------------
+                // 3. 【要件：X傾き対応】常に直立し、かつユーザーを見る
+                // ---------------------------------------------------------
+                // キャラクターに「カメラの方」を向かせるが、
+                // 自分の高さ(y)とカメラの高さ(y)を無視して水平回転だけさせる
+                // これにより、スマホを横に傾けてもキャラは斜めにならず直立する
+                modelObj.lookAt(camObj.position.x, modelObj.position.y, camObj.position.z);
             }
         });
 
-        // 半透明機能
+        // 半透明化スクリプト
         AFRAME.registerComponent('model-opacity', {
             schema: { default: 0.7 },
             init: function () { this.el.addEventListener('model-loaded', this.update.bind(this)); },
@@ -75,8 +105,9 @@
         <div class="chat-container">
             <div class="speaker-name">AKANE</div>
             <div class="message-text">
-                みなさんこんにちは。わたしはAIコンシェルジュのあかねです。<br>
-                お金の使い方などを考える「終活AI」として、みなさんの人生設計をサポートします。
+                設定完了です。<br>
+                上を向けばアゴが見え、<br>
+                横に傾けても私は直立しています。
             </div>
         </div>
     </div>
@@ -90,14 +121,13 @@
             <a-asset-item id="akane-model" src="akane.glb"></a-asset-item>
         </a-assets>
 
-        <a-camera look-controls></a-camera>
+        <a-entity camera look-controls></a-entity>
 
         <a-entity 
             gltf-model="#akane-model" 
-            position="0 0 -3.5"
             scale="1.8 1.8 1.8"
             model-opacity="0.7"
-            no-roll-billboard>
+            horizontal-tray>
         </a-entity>
 
     </a-scene>
