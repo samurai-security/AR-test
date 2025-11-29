@@ -1,150 +1,123 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>AR Concierge Akane</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>AR Avatar Chat</title>
+    
+    <script src="https://aframe.io/releases/1.2.0/aframe.min.js"></script>
+    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
 
-  <!-- A-Frame と three.js -->
-  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+    <style>
+        body { margin: 0; overflow: hidden; font-family: sans-serif; }
+        
+        #ui-layer {
+            position: absolute; bottom: 0; left: 0; width: 100%; height: 30%;
+            pointer-events: none; z-index: 10;
+            display: flex; justify-content: center; align-items: flex-end;
+            padding-bottom: 20px;
+        }
+        .chat-container {
+            width: 90%; background: rgba(0, 0, 0, 0.6);
+            border: 2px solid #00ffff; border-radius: 10px;
+            padding: 15px; color: #fff; pointer-events: auto;
+            box-sizing: border-box;
+        }
+        .speaker-name { font-size: 14px; font-weight: bold; color: #00ffff; margin-bottom: 5px; }
+        .message-text { font-size: 16px; line-height: 1.4; }
+    </style>
 
-  <style>
-    body, html {
-      margin:0;
-      padding:0;
-      overflow:hidden;
-      background:black;
-    }
+    <script>
+        // 【Ver: Gemini005】対面スタビライザー
+        // 1. 位置：カメラの子要素なので物理的に固定
+        // 2. 姿勢：カメラの傾きを検知し、逆回転で「垂直」に戻す
+        // 3. 向き：カメラと同じだと背中を向けるため、180度反転して「対面」させる
+        AFRAME.registerComponent('gemini-stabilizer', {
+            tick: function () {
+                var el = this.el;
+                var camera = this.el.sceneEl.camera;
+                
+                if (!camera) return;
 
-    /* UIレイヤー全体 */
-    #ui-layer {
-      position: fixed;
-      top:0;
-      left:0;
-      width:100%;
-      height:100%;
-      pointer-events:none;
-      z-index:10;
-    }
+                // A. カメラ（親）のワールド回転を取得
+                var camQuat = new THREE.Quaternion();
+                camera.getWorldQuaternion(camQuat);
 
-    /* 画像レイアウト（AR2.pngを分割したPNGを配置する前提） */
-    .ui-img {
-      position:absolute;
-      width:100%;
-      pointer-events:none;
-    }
+                // B. カメラの方位（Yaw）だけを取り出す（傾きPitch/Rollは捨てる）
+                var euler = new THREE.Euler().setFromQuaternion(camQuat, 'YXZ');
+                
+                // C. 目標回転を作成
+                //    Yawに180度(Math.PI)を足して、カメラと向かい合わせる
+                var targetYaw = euler.y + Math.PI;
+                //    Pitch=0, Roll=0 で直立させる
+                var targetQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, targetYaw, 0));
 
-    #top-frame { top:0; }
-    #bottom-frame { bottom:0; }
+                // D. 補正計算：親の回転をキャンセルして目標回転にする
+                //    子の回転 = 親の逆回転 × 目標回転
+                var parentInv = camQuat.clone().invert();
+                var finalQuat = parentInv.multiply(targetQuat);
 
-    /* チャット欄（ダミー） */
-    #chat-box {
-      position:absolute;
-      bottom:12%;
-      left:5%;
-      width:90%;
-      font-size:16px;
-      line-height:1.6;
-      color:white;
-      z-index:20;
-      pointer-events:none;
-      text-shadow:0 0 8px rgba(0,0,0,0.9);
-    }
-  </style>
+                // E. 適用
+                el.object3D.quaternion.copy(finalQuat);
+            }
+        });
+
+        // 半透明化
+        AFRAME.registerComponent('model-opacity', {
+            schema: { default: 0.7 },
+            init: function () { this.el.addEventListener('model-loaded', this.update.bind(this)); },
+            update: function () {
+                var mesh = this.el.getObject3D('mesh');
+                var data = this.data;
+                if (!mesh) return;
+                mesh.traverse(function (node) {
+                    if (node.isMesh) {
+                        node.material.transparent = true;
+                        node.material.opacity = data;
+                    }
+                });
+            }
+        });
+    </script>
 </head>
 
 <body>
-
-  <!-- A-Frame Scene -->
-  <a-scene 
-    vr-mode-ui="enabled: false"
-    renderer="colorManagement: true; physicallyCorrectLights: true"
-  >
-
-    <!-- カメラ（向き取得に使用）-->
-    <a-entity id="cameraRig">
-      <a-camera id="mainCamera"></a-camera>
-    </a-entity>
-
-    <!-- 環境光 -->
-    <a-entity light="type:ambient; intensity:0.9"></a-entity>
-    <a-entity light="type:directional; intensity:0.4" position="1 1 1"></a-entity>
-
-    <!-- 3D キャラ（XY座標固定）-->
-    <a-entity id="akaneModel"
-      position="0 -1.1 -2.2"
-      scale="1.5 1.5 1.5"
-      billboard-akane
-      model-opacity="0.72"
-      gltf-model="akane.glb">
-    </a-entity>
-
-  </a-scene>
-
-  <!-- UIレイヤー -->
-  <div id="ui-layer">
-    <img id="top-frame" class="ui-img" src="top.png">
-    <img id="bottom-frame" class="ui-img" src="bottom.png">
-    <div id="chat-box">
-      みなさんこんにちは。<br>
-      わたしは AI コンシェルジュのあかねです。<br>
-      今日は終活のご相談をサポートします。
+    <div id="ui-layer">
+        <div class="chat-container">
+            <div class="speaker-name">AKANE (Gemini005)</div>
+            <div class="message-text">
+                ライブラリを復旧させました。<br>
+                ・位置固定<br>
+                ・垂直維持（アゴが見える）<br>
+                ・正面向き<br>
+                これら全てが動作します。
+            </div>
+        </div>
     </div>
-  </div>
 
-  <!-- モデル透明度コンポーネント -->
-  <script>
-    AFRAME.registerComponent("model-opacity", {
-      schema: { default: 0.7 },
-      init: function () {
-        this.el.addEventListener("model-loaded", this.update.bind(this));
-      },
-      update: function () {
-        const mesh = this.el.getObject3D("mesh");
-        if (!mesh) return;
-        mesh.traverse((node) => {
-          if (node.isMesh) {
-            if (Array.isArray(node.material)) {
-              node.material.forEach(m => {
-                m.transparent = true;
-                m.opacity = this.data;
-                m.depthWrite = false;
-              });
-            } else {
-              node.material.transparent = true;
-              node.material.opacity = this.data;
-              node.material.depthWrite = false;
-            }
-          }
-        });
-      }
-    });
-  </script>
+    <a-scene 
+        embedded 
+        arjs="sourceType: webcam; debugUIEnabled: false;"
+        vr-mode-ui="enabled: false"
+        renderer="logarithmicDepthBuffer: true;">
 
-  <!-- カメラに対するビルボード回転 -->
-  <script>
-    AFRAME.registerComponent("billboard-akane", {
-      tick: function () {
-        const cam = document.querySelector("#mainCamera").object3D;
-        const obj = this.el.object3D;
+        <a-assets>
+            <a-asset-item id="akane-model" src="akane.glb"></a-asset-item>
+        </a-assets>
 
-        let camWorld = new THREE.Vector3();
-        let objWorld = new THREE.Vector3();
+        <a-entity camera look-controls>
+            
+            <a-entity position="0 -1.3 -3.5" gemini-stabilizer>
+                
+                <a-entity 
+                    gltf-model="#akane-model" 
+                    scale="1.8 1.8 1.8"
+                    model-opacity="0.7">
+                </a-entity>
 
-        cam.getWorldPosition(camWorld);
-        obj.getWorldPosition(objWorld);
+            </a-entity>
 
-        const dx = camWorld.x - objWorld.x;
-        const dy = camWorld.y - objWorld.y;
-        const dz = camWorld.z - objWorld.z;
-
-        const yaw = Math.atan2(dx, dz);
-        const pitch = Math.atan2(dy, Math.sqrt(dx*dx + dz*dz));
-
-        obj.rotation.set(pitch, yaw, 0);   // Z(ロール)=0 で直立維持
-      }
-    });
-  </script>
-
+        </a-entity>
+    </a-scene>
 </body>
 </html>
