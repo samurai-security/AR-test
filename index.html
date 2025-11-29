@@ -1,108 +1,150 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>AR Avatar Chat - claude008</title>
-    
-    <script src="https://aframe.io/releases/1.2.0/aframe.min.js"></script>
-    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>AR Concierge Akane</title>
 
-    <style>
-        body { margin: 0; overflow: hidden; font-family: sans-serif; }
-        #ui-layer {
-            position: absolute; bottom: 0; left: 0; width: 100%; height: 30%;
-            pointer-events: none; display: flex; flex-direction: column; justify-content: flex-end; z-index: 10;
-        }
-        .chat-container {
-            width: 90%; margin: 0 auto 20px auto;
-            background: rgba(0, 0, 0, 0.6);
-            border: 2px solid #00ffff; border-radius: 10px; padding: 15px;
-            pointer-events: auto; box-sizing: border-box; color: #fff;
-        }
-        .speaker-name { font-size: 14px; font-weight: bold; color: #00ffff; margin-bottom: 5px; }
-        .message-text { font-size: 16px; line-height: 1.4; text-shadow: 1px 1px 2px black; }
-    </style>
+  <!-- A-Frame と three.js -->
+  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
 
-    <script>
-        AFRAME.registerComponent('upright-billboard', {
-            init: function() {
-                this.camera = null;
-            },
+  <style>
+    body, html {
+      margin:0;
+      padding:0;
+      overflow:hidden;
+      background:black;
+    }
 
-            tick: function() {
-                if (!this.camera) {
-                    this.camera = this.el.sceneEl.camera;
-                    if (!this.camera) return;
-                }
+    /* UIレイヤー全体 */
+    #ui-layer {
+      position: fixed;
+      top:0;
+      left:0;
+      width:100%;
+      height:100%;
+      pointer-events:none;
+      z-index:10;
+    }
 
-                var object = this.el.object3D;
-                var cameraPos = new THREE.Vector3();
-                var objectPos = new THREE.Vector3();
-                this.camera.getWorldPosition(cameraPos);
-                object.getWorldPosition(objectPos);
+    /* 画像レイアウト（AR2.pngを分割したPNGを配置する前提） */
+    .ui-img {
+      position:absolute;
+      width:100%;
+      pointer-events:none;
+    }
 
-                var direction = new THREE.Vector3();
-                direction.subVectors(cameraPos, objectPos);
-                direction.normalize();
+    #top-frame { top:0; }
+    #bottom-frame { bottom:0; }
 
-                var yaw = Math.atan2(direction.x, direction.z);
-                var pitch = Math.asin(-direction.y);
-
-                object.rotation.set(pitch, yaw, 0);
-            }
-        });
-
-        AFRAME.registerComponent('model-opacity', {
-            schema: { default: 0.7 },
-            init: function () { 
-                this.el.addEventListener('model-loaded', this.update.bind(this)); 
-            },
-            update: function () {
-                var mesh = this.el.getObject3D('mesh');
-                var data = this.data;
-                if (!mesh) return;
-                mesh.traverse(function (node) {
-                    if (node.isMesh) {
-                        node.material.transparent = true;
-                        node.material.opacity = data;
-                    }
-                });
-            }
-        });
-    </script>
+    /* チャット欄（ダミー） */
+    #chat-box {
+      position:absolute;
+      bottom:12%;
+      left:5%;
+      width:90%;
+      font-size:16px;
+      line-height:1.6;
+      color:white;
+      z-index:20;
+      pointer-events:none;
+      text-shadow:0 0 8px rgba(0,0,0,0.9);
+    }
+  </style>
 </head>
 
 <body>
-    <div id="ui-layer">
-        <div class="chat-container">
-            <div class="speaker-name">AKANE - claude008</div>
-            <div class="message-text">
-                みなさんこんにちは。わたしはAIコンシェルジュのあかねです。<br>
-                お金の使い方などを考える「終活AI」として、みなさんの人生設計をサポートします。
-            </div>
-        </div>
+
+  <!-- A-Frame Scene -->
+  <a-scene 
+    vr-mode-ui="enabled: false"
+    renderer="colorManagement: true; physicallyCorrectLights: true"
+  >
+
+    <!-- カメラ（向き取得に使用）-->
+    <a-entity id="cameraRig">
+      <a-camera id="mainCamera"></a-camera>
+    </a-entity>
+
+    <!-- 環境光 -->
+    <a-entity light="type:ambient; intensity:0.9"></a-entity>
+    <a-entity light="type:directional; intensity:0.4" position="1 1 1"></a-entity>
+
+    <!-- 3D キャラ（XY座標固定）-->
+    <a-entity id="akaneModel"
+      position="0 -1.1 -2.2"
+      scale="1.5 1.5 1.5"
+      billboard-akane
+      model-opacity="0.72"
+      gltf-model="akane.glb">
+    </a-entity>
+
+  </a-scene>
+
+  <!-- UIレイヤー -->
+  <div id="ui-layer">
+    <img id="top-frame" class="ui-img" src="top.png">
+    <img id="bottom-frame" class="ui-img" src="bottom.png">
+    <div id="chat-box">
+      みなさんこんにちは。<br>
+      わたしは AI コンシェルジュのあかねです。<br>
+      今日は終活のご相談をサポートします。
     </div>
+  </div>
 
-    <a-scene 
-        embedded 
-        arjs="sourceType: webcam; debugUIEnabled: false;"
-        vr-mode-ui="enabled: false">
+  <!-- モデル透明度コンポーネント -->
+  <script>
+    AFRAME.registerComponent("model-opacity", {
+      schema: { default: 0.7 },
+      init: function () {
+        this.el.addEventListener("model-loaded", this.update.bind(this));
+      },
+      update: function () {
+        const mesh = this.el.getObject3D("mesh");
+        if (!mesh) return;
+        mesh.traverse((node) => {
+          if (node.isMesh) {
+            if (Array.isArray(node.material)) {
+              node.material.forEach(m => {
+                m.transparent = true;
+                m.opacity = this.data;
+                m.depthWrite = false;
+              });
+            } else {
+              node.material.transparent = true;
+              node.material.opacity = this.data;
+              node.material.depthWrite = false;
+            }
+          }
+        });
+      }
+    });
+  </script>
 
-        <a-assets>
-            <a-asset-item id="akane-model" src="akane.glb"></a-asset-item>
-        </a-assets>
+  <!-- カメラに対するビルボード回転 -->
+  <script>
+    AFRAME.registerComponent("billboard-akane", {
+      tick: function () {
+        const cam = document.querySelector("#mainCamera").object3D;
+        const obj = this.el.object3D;
 
-        <a-camera look-controls></a-camera>
+        let camWorld = new THREE.Vector3();
+        let objWorld = new THREE.Vector3();
 
-        <a-entity 
-            gltf-model="#akane-model" 
-            position="0 -0.8 -2.5"
-            scale="1.5 1.5 1.5"
-            model-opacity="0.7"
-            upright-billboard>
-        </a-entity>
+        cam.getWorldPosition(camWorld);
+        obj.getWorldPosition(objWorld);
 
-    </a-scene>
+        const dx = camWorld.x - objWorld.x;
+        const dy = camWorld.y - objWorld.y;
+        const dz = camWorld.z - objWorld.z;
+
+        const yaw = Math.atan2(dx, dz);
+        const pitch = Math.atan2(dy, Math.sqrt(dx*dx + dz*dz));
+
+        obj.rotation.set(pitch, yaw, 0);   // Z(ロール)=0 で直立維持
+      }
+    });
+  </script>
+
 </body>
 </html>
