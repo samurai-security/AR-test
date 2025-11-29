@@ -1,163 +1,257 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>AR Avatar Chat - claude016 DEBUG</title>
-    
-    <script src="https://aframe.io/releases/1.2.0/aframe.min.js"></script>
-    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+  <meta charset="utf-8" />
+  <title>Akane 3D Control Test</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: #000;
+      color: #fff;
+      font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    }
+    #info {
+      position: fixed;
+      top: 8px;
+      left: 8px;
+      right: 8px;
+      padding: 6px 10px;
+      background: rgba(0,0,0,0.45);
+      font-size: 12px;
+      line-height: 1.6;
+      z-index: 10;
+    }
+    #info b {
+      color: #00e0ff;
+    }
+    canvas {
+      display: block;
+    }
+  </style>
 
-    <style>
-        body { margin: 0; overflow: hidden; font-family: sans-serif; }
-        #debug {
-            position: absolute; top: 10px; left: 10px;
-            background: rgba(0,0,0,0.8); color: #0f0;
-            padding: 10px; font-family: monospace; font-size: 11px;
-            z-index: 1000; max-width: 90%;
-        }
-        #ui-layer {
-            position: absolute; bottom: 0; left: 0; width: 100%; height: 30%;
-            pointer-events: none; display: flex; flex-direction: column; justify-content: flex-end; z-index: 10;
-        }
-        .chat-container {
-            width: 90%; margin: 0 auto 20px auto;
-            background: rgba(0, 0, 0, 0.6);
-            border: 2px solid #00ffff; border-radius: 10px; padding: 15px;
-            pointer-events: auto; box-sizing: border-box; color: #fff;
-        }
-        .speaker-name { font-size: 14px; font-weight: bold; color: #00ffff; margin-bottom: 5px; }
-        .message-text { font-size: 16px; line-height: 1.4; text-shadow: 1px 1px 2px black; }
-    </style>
-
-    <script>
-        AFRAME.registerComponent("debug-billboard", {
-            init: function () {
-                this.cameraEl = document.querySelector("#mainCamera") || document.querySelector("[camera]");
-                this.camera = this.cameraEl ? this.cameraEl.object3D : null;
-                this.mesh = null;
-                this.frameCount = 0;
-                
-                this.el.addEventListener("model-loaded", () => {
-                    this.mesh = this.el.getObject3D("mesh");
-                    console.log("✅ Model loaded");
-                });
-                
-                console.log("✅ Component initialized");
-                console.log("Camera found:", !!this.camera);
-                console.log("Entity position attribute:", this.el.getAttribute("position"));
-            },
-
-            tick: function () {
-                this.frameCount++;
-                
-                if (!this.camera) {
-                    if (this.frameCount % 60 === 0) {
-                        console.log("❌ Camera not found");
-                    }
-                    return;
-                }
-                
-                if (!this.mesh) {
-                    if (this.frameCount % 60 === 0) {
-                        console.log("⏳ Waiting for model...");
-                    }
-                    return;
-                }
-                
-                // 座標取得
-                var camPos = new THREE.Vector3();
-                var entityPos = new THREE.Vector3();
-                var meshPos = new THREE.Vector3();
-                
-                this.camera.getWorldPosition(camPos);
-                this.el.object3D.getWorldPosition(entityPos);
-                this.mesh.getWorldPosition(meshPos);
-                
-                // デバッグ表示（1秒ごと）
-                if (this.frameCount % 60 === 0) {
-                    var debugEl = document.getElementById('debug');
-                    if (debugEl) {
-                        debugEl.innerHTML = 
-                            '<b>CAMERA:</b><br>' +
-                            'X: ' + camPos.x.toFixed(2) + ' Y: ' + camPos.y.toFixed(2) + ' Z: ' + camPos.z.toFixed(2) + '<br><br>' +
-                            '<b>ENTITY (should be 0, -0.8, -2.5):</b><br>' +
-                            'X: ' + entityPos.x.toFixed(2) + ' Y: ' + entityPos.y.toFixed(2) + ' Z: ' + entityPos.z.toFixed(2) + '<br><br>' +
-                            '<b>MESH:</b><br>' +
-                            'X: ' + meshPos.x.toFixed(2) + ' Y: ' + meshPos.y.toFixed(2) + ' Z: ' + meshPos.z.toFixed(2) + '<br><br>' +
-                            '<b>Position Attr:</b> ' + JSON.stringify(this.el.getAttribute("position"));
-                    }
-                    
-                    console.log("Camera:", camPos);
-                    console.log("Entity:", entityPos);
-                    console.log("Mesh:", meshPos);
-                }
-                
-                // ビルボード計算
-                var dx = camPos.x - entityPos.x;
-                var dy = camPos.y - entityPos.y;
-                var dz = camPos.z - entityPos.z;
-                
-                var yaw = Math.atan2(dx, dz);
-                var horizontal = Math.sqrt(dx * dx + dz * dz);
-                var pitch = Math.atan2(dy, horizontal) * -1;
-                
-                this.mesh.rotation.set(pitch, yaw, 0);
-            }
-        });
-
-        AFRAME.registerComponent('model-opacity', {
-            schema: { default: 0.7 },
-            init: function () { 
-                this.el.addEventListener('model-loaded', this.update.bind(this)); 
-            },
-            update: function () {
-                var mesh = this.el.getObject3D('mesh');
-                var data = this.data;
-                if (!mesh) return;
-                mesh.traverse(function (node) {
-                    if (node.isMesh) {
-                        node.material.transparent = true;
-                        node.material.opacity = data;
-                    }
-                });
-            }
-        });
-    </script>
+  <!-- three.js & GLTFLoader -->
+  <script src="https://unpkg.com/three@0.155.0/build/three.min.js"></script>
+  <script src="https://unpkg.com/three@0.155.0/examples/js/loaders/GLTFLoader.js"></script>
 </head>
 
 <body>
-    <div id="debug">Loading...</div>
-    
-    <div id="ui-layer">
-        <div class="chat-container">
-            <div class="speaker-name">AKANE - claude016 DEBUG</div>
-            <div class="message-text">
-                デバッグモード起動中<br>
-                画面左上に座標情報を表示します
-            </div>
-        </div>
-    </div>
+<div id="info">
+  <b>Akane 3D 制御テスト</b><br>
+  スマホ: 端末を上下左右に傾けるとキャラが追従します（roll=0固定）。<br>
+  PC: マウスドラッグで向き確認できます。
+</div>
 
-    <a-scene 
-        embedded 
-        arjs="sourceType: webcam; debugUIEnabled: false;"
-        vr-mode-ui="enabled: false">
+<script>
+  // =========================
+  // 基本 three.js セットアップ
+  // =========================
+  let scene, camera, renderer;
+  let akane = null;
 
-        <a-assets>
-            <a-asset-item id="akane-model" src="akane.glb"></a-asset-item>
-        </a-assets>
+  let targetYaw = 0;     // 左右（Y軸）
+  let targetPitch = 0;   // 上下（X軸）
+  let currentYaw = 0;
+  let currentPitch = 0;
 
-        <a-camera id="mainCamera" look-controls></a-camera>
+  let baseBeta = null;   // スマホ初期キャリブレーション（上下）
+  let baseGamma = null;  // スマホ初期キャリブレーション（左右）
+  let hasDeviceOrientation = false;
+  let isMouseDown = false;
+  let lastMouseX = 0;
+  let lastMouseY = 0;
 
-        <a-entity 
-            gltf-model="#akane-model" 
-            position="0 -0.8 -2.5"
-            scale="1.5 1.5 1.5"
-            model-opacity="0.7"
-            debug-billboard>
-        </a-entity>
+  init();
+  animate();
 
-    </a-scene>
+  function init() {
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x050810);
+
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+
+    camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 100);
+    camera.position.set(0, 1.6, 4);
+    camera.lookAt(0, 1.2, 0);
+
+    renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setSize(width, height);
+    renderer.outputEncoding = THREE.sRGBEncoding;
+    document.body.appendChild(renderer.domElement);
+
+    // ライト
+    const hemi = new THREE.HemisphereLight(0xffffff, 0x222233, 1.0);
+    hemi.position.set(0, 1, 0);
+    scene.add(hemi);
+
+    const dir = new THREE.DirectionalLight(0xffffff, 0.9);
+    dir.position.set(1.5, 2.5, 1.0);
+    scene.add(dir);
+
+    const fill = new THREE.DirectionalLight(0x88aaff, 0.4);
+    fill.position.set(-2, 1, -1);
+    scene.add(fill);
+
+    // 簡易床
+    const floorGeo = new THREE.CircleGeometry(1.0, 48);
+    const floorMat = new THREE.MeshStandardMaterial({
+      color: 0x101822, roughness: 0.9, metalness: 0.0
+    });
+    const floor = new THREE.Mesh(floorGeo, floorMat);
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.y = 0;
+    scene.add(floor);
+
+    // =========================
+    // GLB 読み込み
+    // =========================
+    const loader = new THREE.GLTFLoader();
+    loader.load(
+      "akane_Light.glb",
+      function (gltf) {
+        akane = gltf.scene;
+        akane.position.set(0, 0, 0);
+        akane.scale.set(1.3, 1.3, 1.3);
+
+        // 半透明 0.72
+        akane.traverse((node) => {
+          if (node.isMesh) {
+            const m = node.material;
+            const apply = (mat) => {
+              mat.transparent = true;
+              mat.opacity = 0.72;
+            };
+            if (Array.isArray(m)) m.forEach(apply);
+            else apply(m);
+          }
+        });
+
+        scene.add(akane);
+      },
+      undefined,
+      function (error) {
+        console.error("GLB読み込み失敗:", error);
+      }
+    );
+
+    window.addEventListener("resize", onWindowResize);
+
+    // =========================
+    // スマホ DeviceOrientation
+    // =========================
+    if (window.DeviceOrientationEvent) {
+      window.addEventListener("deviceorientation", onDeviceOrientation, true);
+    }
+
+    // =========================
+    // マウス（PC）コントロール
+    // =========================
+    renderer.domElement.addEventListener("mousedown", (e) => {
+      isMouseDown = true;
+      lastMouseX = e.clientX;
+      lastMouseY = e.clientY;
+    });
+    window.addEventListener("mouseup", () => { isMouseDown = false; });
+
+    window.addEventListener("mousemove", (e) => {
+      if (!isMouseDown) return;
+      handleDrag(e.clientX, e.clientY);
+    });
+
+    // スマホのタッチ
+    window.addEventListener("touchstart", (e) => {
+      if (e.touches.length > 0) {
+        isMouseDown = true;
+        lastMouseX = e.touches[0].clientX;
+        lastMouseY = e.touches[0].clientY;
+      }
+    }, { passiv: true });
+
+    window.addEventListener("touchend", () => { isMouseDown = false; });
+    window.addEventListener("touchmove", (e) => {
+      if (e.touches.length > 0) {
+        handleDrag(e.touches[0].clientX, e.touches[0].clientY);
+      }
+    }, { passive: true });
+  }
+
+  function onWindowResize() {
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+    camera.aspect = width / height;
+    camera.updateProjectionMatrix();
+    renderer.setSize(width, height);
+  }
+
+  // =========================
+  // DeviceOrientation（スマホ傾き）
+  // =========================
+  function onDeviceOrientation(event) {
+    if (event.beta === null || event.gamma === null) return;
+
+    if (baseBeta === null) {
+      baseBeta = event.beta;
+      baseGamma = event.gamma;
+    }
+
+    const deltaBeta = event.beta - baseBeta;     // 上下
+    const deltaGamma = event.gamma - baseGamma;  // 左右
+
+    const pitchScale = 0.7; // 感度調整
+    const yawScale   = 0.7;
+
+    targetPitch = THREE.Math.degToRad(deltaBeta  * pitchScale);
+    targetYaw   = THREE.Math.degToRad(deltaGamma * yawScale);
+
+    // 挙動の安定化
+    const maxPitch = THREE.Math.degToRad(40);
+    const maxYaw   = THREE.Math.degToRad(60);
+    targetPitch = THREE.Math.clamp(targetPitch, -maxPitch, maxPitch);
+    targetYaw   = THREE.Math.clamp(targetYaw, -maxYaw, maxYaw);
+  }
+
+  // =========================
+  // マウス回転（PC用）
+  // =========================
+  function handleDrag(x, y) {
+    const dx = x - lastMouseX;
+    const dy = y - lastMouseY;
+
+    lastMouseX = x;
+    lastMouseY = y;
+
+    const yawSpeed = 0.01;
+    const pitchSpeed = 0.01;
+
+    targetYaw   += dx * yawSpeed;
+    targetPitch += dy * pitchSpeed;
+
+    const maxPitch = THREE.Math.degToRad(60);
+    targetPitch = THREE.Math.clamp(targetPitch, -maxPitch, maxPitch);
+  }
+
+  // =========================
+  // 毎フレーム更新
+  // =========================
+  function animate() {
+    requestAnimationFrame(animate);
+
+    if (akane) {
+      const lerpFactor = 0.12;
+      currentYaw   += (targetYaw   - currentYaw)   * lerpFactor;
+      currentPitch += (targetPitch - currentPitch) * lerpFactor;
+
+      // roll=0（直立固定）
+      akane.rotation.set(currentPitch, currentYaw, 0);
+    }
+
+    renderer.render(scene, camera);
+  }
+</script>
+
 </body>
 </html>
