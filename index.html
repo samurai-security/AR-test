@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
@@ -26,31 +26,28 @@
     </style>
 
     <script>
-        // 【最終決定版】Smart Gravity Billboard
-        // キャラクターをカメラの子要素（位置固定）にした状態で、
-        // 毎フレーム「重力に対して垂直になるよう」回転だけを強制補正する
-        AFRAME.registerComponent('smart-billboard', {
+        // 【完全修正版】Y軸回転のみのビルボード
+        // キャラクターを常に直立させたまま、カメラの方向だけを向かせる
+        AFRAME.registerComponent('y-billboard', {
             tick: function () {
                 var camera = this.el.sceneEl.camera;
                 if (!camera) return;
 
-                // 1. ターゲット（カメラ）のワールド座標を取得
-                var targetPos = new THREE.Vector3();
-                camera.getWorldPosition(targetPos);
+                // カメラとキャラクターのワールド座標を取得
+                var cameraPos = new THREE.Vector3();
+                var characterPos = new THREE.Vector3();
+                camera.getWorldPosition(cameraPos);
+                this.el.object3D.getWorldPosition(characterPos);
 
-                // 2. 自分（キャラ）のワールド座標を取得
-                var myPos = new THREE.Vector3();
-                this.el.object3D.getWorldPosition(myPos);
+                // XZ平面上での方向ベクトルを計算（Y軸は無視）
+                var dx = cameraPos.x - characterPos.x;
+                var dz = cameraPos.z - characterPos.z;
 
-                // 3. 高さを自分に合わせて「水平」にする
-                // これにより、カメラが上にあろうが下にあろうが、
-                // 「同じ高さにあるカメラ」を見るように回転するため、直立が保たれる
-                targetPos.y = myPos.y;
+                // Y軸周りの回転角度を計算
+                var angle = Math.atan2(dx, dz);
 
-                // 4. その方向を見る
-                // A-Frame(Three.js)の lookAt は親要素の回転を考慮して
-                // 自動的に逆算してくれるため、これで「カメラの傾き」が打ち消される
-                this.el.object3D.lookAt(targetPos);
+                // Y軸回転のみを適用（X軸とZ軸の回転は0に固定）
+                this.el.object3D.rotation.set(0, angle, 0);
             }
         });
 
@@ -78,9 +75,8 @@
         <div class="chat-container">
             <div class="speaker-name">AKANE</div>
             <div class="message-text">
-                これで解決です。<br>
-                私はカメラにくっついているので位置はずれません。<br>
-                でも、回転制御で常にまっすぐ立っています。
+                みなさんこんにちは。わたしはAIコンシェルジュのあかねです。<br>
+                お金の使い方などを考える「終活AI」として、みなさんの人生設計をサポートします。
             </div>
         </div>
     </div>
@@ -101,7 +97,7 @@
                 position="0 -1.6 -3.5"
                 scale="1.8 1.8 1.8"
                 model-opacity="0.7"
-                smart-billboard>
+                y-billboard>
             </a-entity>
 
         </a-entity>
