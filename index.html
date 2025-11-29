@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="utf-8" />
-  <title>Akane 3D Control Test</title>
+  <title>AR Avatar - Akane</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
   <style>
     html, body {
@@ -10,248 +10,556 @@
       padding: 0;
       overflow: hidden;
       background: #000;
-      color: #fff;
-      font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", sans-serif;
+      width: 100%;
+      height: 100%;
     }
-    #info {
+
+    /* カメラ映像（背景） */
+    #camera-video {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      z-index: 0;
+    }
+
+    /* Three.js Canvas */
+    #three-canvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+    }
+
+    /* チャットUI */
+    #chat-container {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      z-index: 10;
+      padding: 0 10px 20px 10px;
+    }
+
+    #chat-box {
+      background: linear-gradient(135deg, rgba(0, 40, 60, 0.85) 0%, rgba(0, 60, 80, 0.85) 100%);
+      border: 1px solid rgba(0, 200, 255, 0.4);
+      border-radius: 12px;
+      padding: 15px;
+      margin-bottom: 12px;
+      box-shadow: 
+        0 0 20px rgba(0, 180, 255, 0.2),
+        inset 0 0 30px rgba(0, 100, 150, 0.1);
+    }
+
+    #chat-text {
+      color: #fff;
+      font-size: 15px;
+      line-height: 1.7;
+      text-shadow: 0 0 10px rgba(0, 200, 255, 0.3);
+    }
+
+    #version-tag {
+      position: absolute;
+      top: 8px;
+      right: 12px;
+      font-size: 10px;
+      color: rgba(0, 200, 255, 0.6);
+    }
+
+    #button-container {
+      display: flex;
+      gap: 12px;
+    }
+
+    .chat-button {
+      flex: 1;
+      padding: 14px 20px;
+      border-radius: 25px;
+      border: none;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    #btn-continue {
+      background: linear-gradient(135deg, #ffffff 0%, #e8e8e8 100%);
+      color: #333;
+    }
+
+    #btn-menu {
+      background: linear-gradient(135deg, #ffffff 0%, #e8e8e8 100%);
+      color: #333;
+    }
+
+    .chat-button:active {
+      transform: scale(0.96);
+    }
+
+    /* やり直すボタン */
+    #retry-button {
+      position: fixed;
+      right: 15px;
+      bottom: 200px;
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #00c8ff 0%, #0090c0 100%);
+      border: none;
+      color: #fff;
+      font-size: 12px;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 15px rgba(0, 180, 255, 0.4);
+      z-index: 10;
+    }
+
+    #retry-button svg {
+      width: 20px;
+      height: 20px;
+      margin-bottom: 2px;
+    }
+
+    #retry-button span {
+      font-size: 9px;
+    }
+
+    /* デバッグ情報（開発時のみ表示） */
+    #debug-info {
       position: fixed;
       top: 8px;
       left: 8px;
-      right: 8px;
-      padding: 6px 10px;
-      background: rgba(0,0,0,0.45);
-      font-size: 12px;
-      line-height: 1.6;
-      z-index: 10;
-    }
-    #info b {
-      color: #00e0ff;
-    }
-    canvas {
-      display: block;
+      background: rgba(0,0,0,0.6);
+      color: #0f0;
+      font-size: 10px;
+      padding: 8px;
+      border-radius: 5px;
+      z-index: 100;
+      display: none; /* 本番時はnone */
     }
   </style>
-
-  <!-- three.js & GLTFLoader -->
-  <script src="https://unpkg.com/three@0.155.0/build/three.min.js"></script>
-  <script src="https://unpkg.com/three@0.155.0/examples/js/loaders/GLTFLoader.js"></script>
 </head>
 
 <body>
-<div id="info">
-  <b>Akane 3D 制御テスト</b><br>
-  スマホ: 端末を上下左右に傾けるとキャラが追従します（roll=0固定）。<br>
-  PC: マウスドラッグで向き確認できます。
-</div>
+  <!-- カメラ映像 -->
+  <video id="camera-video" autoplay playsinline muted></video>
 
-<script>
-  // =========================
-  // 基本 three.js セットアップ
-  // =========================
-  let scene, camera, renderer;
-  let akane = null;
+  <!-- Three.js描画用Canvas -->
+  <canvas id="three-canvas"></canvas>
 
-  let targetYaw = 0;     // 左右（Y軸）
-  let targetPitch = 0;   // 上下（X軸）
-  let currentYaw = 0;
-  let currentPitch = 0;
+  <!-- デバッグ情報 -->
+  <div id="debug-info">
+    <div>Yaw: <span id="dbg-yaw">0</span>°</div>
+    <div>Pitch: <span id="dbg-pitch">0</span>°</div>
+  </div>
 
-  let baseBeta = null;   // スマホ初期キャリブレーション（上下）
-  let baseGamma = null;  // スマホ初期キャリブレーション（左右）
-  let hasDeviceOrientation = false;
-  let isMouseDown = false;
-  let lastMouseX = 0;
-  let lastMouseY = 0;
+  <!-- やり直すボタン -->
+  <button id="retry-button">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M1 4v6h6M23 20v-6h-6"/>
+      <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/>
+    </svg>
+    <span>やり直す</span>
+  </button>
 
-  init();
-  animate();
+  <!-- チャットUI -->
+  <div id="chat-container">
+    <div id="chat-box">
+      <div id="version-tag">Claude019</div>
+      <div id="chat-text">
+        みなさんこんにちは。わたしはAIコンシェルジュのあかねです。<br>
+        終活に関するご相談やお手伝いをさせていただきます。<br>
+        お気軽にお声がけくださいね。
+      </div>
+    </div>
+    <div id="button-container">
+      <button class="chat-button" id="btn-continue">会話を続ける</button>
+      <button class="chat-button" id="btn-menu">メニューへ</button>
+    </div>
+  </div>
 
-  function init() {
-    scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x050810);
+  <!-- Three.js -->
+  <script src="https://unpkg.com/three@0.155.0/build/three.min.js"></script>
+  <script src="https://unpkg.com/three@0.155.0/examples/js/loaders/GLTFLoader.js"></script>
 
-    const width = window.innerWidth;
-    const height = window.innerHeight;
+  <script>
+    // =========================
+    // グローバル変数
+    // =========================
+    let scene, camera, renderer;
+    let akane = null;
 
-    camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 100);
-    camera.position.set(0, 1.6, 4);
-    camera.lookAt(0, 1.2, 0);
+    // 回転ターゲット（カメラを向く方向）
+    let targetYaw = 0;     // Y軸回転（左右）
+    let targetPitch = 0;   // X軸回転（上下）
+    let currentYaw = 0;
+    let currentPitch = 0;
 
-    renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setPixelRatio(window.devicePixelRatio);
-    renderer.setSize(width, height);
-    renderer.outputEncoding = THREE.sRGBEncoding;
-    document.body.appendChild(renderer.domElement);
+    // デバイスオリエンテーション基準値
+    let baseBeta = null;
+    let baseGamma = null;
+    let orientationInitialized = false;
 
-    // ライト
-    const hemi = new THREE.HemisphereLight(0xffffff, 0x222233, 1.0);
-    hemi.position.set(0, 1, 0);
-    scene.add(hemi);
-
-    const dir = new THREE.DirectionalLight(0xffffff, 0.9);
-    dir.position.set(1.5, 2.5, 1.0);
-    scene.add(dir);
-
-    const fill = new THREE.DirectionalLight(0x88aaff, 0.4);
-    fill.position.set(-2, 1, -1);
-    scene.add(fill);
-
-    // 簡易床
-    const floorGeo = new THREE.CircleGeometry(1.0, 48);
-    const floorMat = new THREE.MeshStandardMaterial({
-      color: 0x101822, roughness: 0.9, metalness: 0.0
-    });
-    const floor = new THREE.Mesh(floorGeo, floorMat);
-    floor.rotation.x = -Math.PI / 2;
-    floor.position.y = 0;
-    scene.add(floor);
+    // マウス/タッチ操作用
+    let isDragging = false;
+    let lastX = 0;
+    let lastY = 0;
 
     // =========================
-    // GLB 読み込み
+    // 初期化
     // =========================
-    const loader = new THREE.GLTFLoader();
-    loader.load(
-      "akane_Light.glb",
-      function (gltf) {
-        akane = gltf.scene;
-        akane.position.set(0, 0, 0);
-        akane.scale.set(1.3, 1.3, 1.3);
+    init();
+    animate();
 
-        // 半透明 0.72
-        akane.traverse((node) => {
-          if (node.isMesh) {
-            const m = node.material;
-            const apply = (mat) => {
-              mat.transparent = true;
-              mat.opacity = 0.72;
-            };
-            if (Array.isArray(m)) m.forEach(apply);
-            else apply(m);
-          }
+    async function init() {
+      // カメラ映像を取得
+      await setupCamera();
+
+      // Three.jsセットアップ
+      setupThreeJS();
+
+      // 3Dモデル読み込み
+      loadModel();
+
+      // イベントリスナー設定
+      setupEventListeners();
+    }
+
+    // =========================
+    // カメラ映像取得
+    // =========================
+    async function setupCamera() {
+      const video = document.getElementById('camera-video');
+      
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: 'environment', // 背面カメラ
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          },
+          audio: false
         });
-
-        scene.add(akane);
-      },
-      undefined,
-      function (error) {
-        console.error("GLB読み込み失敗:", error);
+        video.srcObject = stream;
+      } catch (err) {
+        console.warn('背面カメラ取得失敗、前面カメラを試行:', err);
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: 'user' },
+            audio: false
+          });
+          video.srcObject = stream;
+        } catch (err2) {
+          console.error('カメラ取得失敗:', err2);
+        }
       }
-    );
-
-    window.addEventListener("resize", onWindowResize);
-
-    // =========================
-    // スマホ DeviceOrientation
-    // =========================
-    if (window.DeviceOrientationEvent) {
-      window.addEventListener("deviceorientation", onDeviceOrientation, true);
     }
 
     // =========================
-    // マウス（PC）コントロール
+    // Three.js セットアップ
     // =========================
-    renderer.domElement.addEventListener("mousedown", (e) => {
-      isMouseDown = true;
-      lastMouseX = e.clientX;
-      lastMouseY = e.clientY;
-    });
-    window.addEventListener("mouseup", () => { isMouseDown = false; });
+    function setupThreeJS() {
+      const canvas = document.getElementById('three-canvas');
+      const width = window.innerWidth;
+      const height = window.innerHeight;
 
-    window.addEventListener("mousemove", (e) => {
-      if (!isMouseDown) return;
-      handleDrag(e.clientX, e.clientY);
-    });
+      // シーン（背景透明）
+      scene = new THREE.Scene();
 
-    // スマホのタッチ
-    window.addEventListener("touchstart", (e) => {
+      // カメラ
+      camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 100);
+      camera.position.set(0, 1.0, 3.5);
+      camera.lookAt(0, 0.9, 0);
+
+      // レンダラー（透明背景）
+      renderer = new THREE.WebGLRenderer({ 
+        canvas: canvas,
+        antialias: true, 
+        alpha: true 
+      });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.setSize(width, height);
+      renderer.outputEncoding = THREE.sRGBEncoding;
+      renderer.setClearColor(0x000000, 0); // 完全透明
+
+      // ライティング
+      const ambient = new THREE.AmbientLight(0xffffff, 0.6);
+      scene.add(ambient);
+
+      const mainLight = new THREE.DirectionalLight(0xffffff, 0.8);
+      mainLight.position.set(1, 2, 2);
+      scene.add(mainLight);
+
+      const fillLight = new THREE.DirectionalLight(0x88ccff, 0.4);
+      fillLight.position.set(-2, 1, -1);
+      scene.add(fillLight);
+
+      const backLight = new THREE.DirectionalLight(0xffffee, 0.3);
+      backLight.position.set(0, 1, -2);
+      scene.add(backLight);
+    }
+
+    // =========================
+    // 3Dモデル読み込み
+    // =========================
+    function loadModel() {
+      const loader = new THREE.GLTFLoader();
+      
+      // akane_Light.glb を読み込み（同じディレクトリに配置）
+      loader.load(
+        'akane_Light.glb',
+        function(gltf) {
+          akane = gltf.scene;
+          
+          // 位置とスケール設定（AR2.pngの位置に合わせる）
+          akane.position.set(0, -0.3, 0);
+          akane.scale.set(1.1, 1.1, 1.1);
+
+          // 半透明化（opacity: 0.75）
+          akane.traverse((node) => {
+            if (node.isMesh) {
+              const materials = Array.isArray(node.material) 
+                ? node.material 
+                : [node.material];
+              
+              materials.forEach(mat => {
+                mat.transparent = true;
+                mat.opacity = 0.75;
+                mat.depthWrite = true;
+              });
+            }
+          });
+
+          scene.add(akane);
+          console.log('モデル読み込み完了');
+        },
+        function(progress) {
+          const pct = (progress.loaded / progress.total * 100).toFixed(1);
+          console.log('読み込み中: ' + pct + '%');
+        },
+        function(error) {
+          console.error('モデル読み込みエラー:', error);
+        }
+      );
+    }
+
+    // =========================
+    // イベントリスナー
+    // =========================
+    function setupEventListeners() {
+      // リサイズ
+      window.addEventListener('resize', onResize);
+
+      // デバイスオリエンテーション（スマホ傾き）
+      if (window.DeviceOrientationEvent) {
+        // iOS 13+はパーミッション必要
+        if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+          document.body.addEventListener('click', requestOrientationPermission, { once: true });
+        } else {
+          window.addEventListener('deviceorientation', onDeviceOrientation, true);
+        }
+      }
+
+      // マウス操作（PC用）
+      const canvas = document.getElementById('three-canvas');
+      canvas.addEventListener('mousedown', onPointerDown);
+      window.addEventListener('mousemove', onPointerMove);
+      window.addEventListener('mouseup', onPointerUp);
+
+      // タッチ操作（スマホ用）
+      canvas.addEventListener('touchstart', onTouchStart, { passive: true });
+      window.addEventListener('touchmove', onTouchMove, { passive: true });
+      window.addEventListener('touchend', onPointerUp);
+
+      // やり直すボタン（向きをリセット）
+      document.getElementById('retry-button').addEventListener('click', resetOrientation);
+    }
+
+    // iOS向けパーミッションリクエスト
+    async function requestOrientationPermission() {
+      try {
+        const permission = await DeviceOrientationEvent.requestPermission();
+        if (permission === 'granted') {
+          window.addEventListener('deviceorientation', onDeviceOrientation, true);
+        }
+      } catch (err) {
+        console.error('オリエンテーションパーミッションエラー:', err);
+      }
+    }
+
+    // =========================
+    // デバイスオリエンテーション処理
+    // キャラがカメラ（端末）の方を向く
+    // =========================
+    function onDeviceOrientation(event) {
+      if (event.beta === null || event.gamma === null) return;
+
+      // 初回の向きを基準として保存
+      if (!orientationInitialized) {
+        baseBeta = event.beta;
+        baseGamma = event.gamma;
+        orientationInitialized = true;
+      }
+
+      // 基準からの差分
+      let deltaBeta = event.beta - baseBeta;   // 前後の傾き
+      let deltaGamma = event.gamma - baseGamma; // 左右の傾き
+
+      // 感度調整
+      const sensitivity = 1.2;
+      
+      // キャラがカメラの方を向く
+      // 端末を右に傾ける → gamma増加 → キャラは右を向く（Y軸負回転）
+      // 端末を前に傾ける → beta増加 → キャラは下を向く（X軸負回転）
+      targetYaw = THREE.MathUtils.degToRad(-deltaGamma * sensitivity);
+      targetPitch = THREE.MathUtils.degToRad(-deltaBeta * sensitivity * 0.5);
+
+      // 回転制限
+      const maxYaw = THREE.MathUtils.degToRad(45);
+      const maxPitch = THREE.MathUtils.degToRad(30);
+      
+      targetYaw = THREE.MathUtils.clamp(targetYaw, -maxYaw, maxYaw);
+      targetPitch = THREE.MathUtils.clamp(targetPitch, -maxPitch, maxPitch);
+
+      // デバッグ表示
+      updateDebug();
+    }
+
+    // =========================
+    // マウス/タッチ操作
+    // =========================
+    function onPointerDown(e) {
+      isDragging = true;
+      lastX = e.clientX;
+      lastY = e.clientY;
+    }
+
+    function onTouchStart(e) {
       if (e.touches.length > 0) {
-        isMouseDown = true;
-        lastMouseX = e.touches[0].clientX;
-        lastMouseY = e.touches[0].clientY;
+        isDragging = true;
+        lastX = e.touches[0].clientX;
+        lastY = e.touches[0].clientY;
       }
-    }, { passiv: true });
-
-    window.addEventListener("touchend", () => { isMouseDown = false; });
-    window.addEventListener("touchmove", (e) => {
-      if (e.touches.length > 0) {
-        handleDrag(e.touches[0].clientX, e.touches[0].clientY);
-      }
-    }, { passive: true });
-  }
-
-  function onWindowResize() {
-    const width = window.innerWidth;
-    const height = window.innerHeight;
-    camera.aspect = width / height;
-    camera.updateProjectionMatrix();
-    renderer.setSize(width, height);
-  }
-
-  // =========================
-  // DeviceOrientation（スマホ傾き）
-  // =========================
-  function onDeviceOrientation(event) {
-    if (event.beta === null || event.gamma === null) return;
-
-    if (baseBeta === null) {
-      baseBeta = event.beta;
-      baseGamma = event.gamma;
     }
 
-    const deltaBeta = event.beta - baseBeta;     // 上下
-    const deltaGamma = event.gamma - baseGamma;  // 左右
+    function onPointerMove(e) {
+      if (!isDragging) return;
+      
+      const x = e.clientX || (e.touches && e.touches[0] ? e.touches[0].clientX : lastX);
+      const y = e.clientY || (e.touches && e.touches[0] ? e.touches[0].clientY : lastY);
+      
+      const deltaX = x - lastX;
+      const deltaY = y - lastY;
+      
+      lastX = x;
+      lastY = y;
 
-    const pitchScale = 0.7; // 感度調整
-    const yawScale   = 0.7;
+      // マウスドラッグでキャラの向きを変更
+      const rotSpeed = 0.008;
+      targetYaw -= deltaX * rotSpeed;
+      targetPitch -= deltaY * rotSpeed * 0.5;
 
-    targetPitch = THREE.Math.degToRad(deltaBeta  * pitchScale);
-    targetYaw   = THREE.Math.degToRad(deltaGamma * yawScale);
+      // 回転制限
+      const maxYaw = THREE.MathUtils.degToRad(60);
+      const maxPitch = THREE.MathUtils.degToRad(40);
+      
+      targetYaw = THREE.MathUtils.clamp(targetYaw, -maxYaw, maxYaw);
+      targetPitch = THREE.MathUtils.clamp(targetPitch, -maxPitch, maxPitch);
 
-    // 挙動の安定化
-    const maxPitch = THREE.Math.degToRad(40);
-    const maxYaw   = THREE.Math.degToRad(60);
-    targetPitch = THREE.Math.clamp(targetPitch, -maxPitch, maxPitch);
-    targetYaw   = THREE.Math.clamp(targetYaw, -maxYaw, maxYaw);
-  }
-
-  // =========================
-  // マウス回転（PC用）
-  // =========================
-  function handleDrag(x, y) {
-    const dx = x - lastMouseX;
-    const dy = y - lastMouseY;
-
-    lastMouseX = x;
-    lastMouseY = y;
-
-    const yawSpeed = 0.01;
-    const pitchSpeed = 0.01;
-
-    targetYaw   += dx * yawSpeed;
-    targetPitch += dy * pitchSpeed;
-
-    const maxPitch = THREE.Math.degToRad(60);
-    targetPitch = THREE.Math.clamp(targetPitch, -maxPitch, maxPitch);
-  }
-
-  // =========================
-  // 毎フレーム更新
-  // =========================
-  function animate() {
-    requestAnimationFrame(animate);
-
-    if (akane) {
-      const lerpFactor = 0.12;
-      currentYaw   += (targetYaw   - currentYaw)   * lerpFactor;
-      currentPitch += (targetPitch - currentPitch) * lerpFactor;
-
-      // roll=0（直立固定）
-      akane.rotation.set(currentPitch, currentYaw, 0);
+      updateDebug();
     }
 
-    renderer.render(scene, camera);
-  }
-</script>
+    function onTouchMove(e) {
+      if (!isDragging || e.touches.length === 0) return;
+      
+      const x = e.touches[0].clientX;
+      const y = e.touches[0].clientY;
+      
+      const deltaX = x - lastX;
+      const deltaY = y - lastY;
+      
+      lastX = x;
+      lastY = y;
 
+      const rotSpeed = 0.008;
+      targetYaw -= deltaX * rotSpeed;
+      targetPitch -= deltaY * rotSpeed * 0.5;
+
+      const maxYaw = THREE.MathUtils.degToRad(60);
+      const maxPitch = THREE.MathUtils.degToRad(40);
+      
+      targetYaw = THREE.MathUtils.clamp(targetYaw, -maxYaw, maxYaw);
+      targetPitch = THREE.MathUtils.clamp(targetPitch, -maxPitch, maxPitch);
+
+      updateDebug();
+    }
+
+    function onPointerUp() {
+      isDragging = false;
+    }
+
+    // =========================
+    // 向きリセット
+    // =========================
+    function resetOrientation() {
+      targetYaw = 0;
+      targetPitch = 0;
+      baseBeta = null;
+      baseGamma = null;
+      orientationInitialized = false;
+      updateDebug();
+    }
+
+    // =========================
+    // リサイズ処理
+    // =========================
+    function onResize() {
+      const width = window.innerWidth;
+      const height = window.innerHeight;
+      
+      camera.aspect = width / height;
+      camera.updateProjectionMatrix();
+      renderer.setSize(width, height);
+    }
+
+    // =========================
+    // デバッグ表示更新
+    // =========================
+    function updateDebug() {
+      const yawDeg = THREE.MathUtils.radToDeg(targetYaw).toFixed(1);
+      const pitchDeg = THREE.MathUtils.radToDeg(targetPitch).toFixed(1);
+      
+      document.getElementById('dbg-yaw').textContent = yawDeg;
+      document.getElementById('dbg-pitch').textContent = pitchDeg;
+    }
+
+    // =========================
+    // アニメーションループ
+    // =========================
+    function animate() {
+      requestAnimationFrame(animate);
+
+      if (akane) {
+        // スムーズに補間
+        const lerpFactor = 0.1;
+        currentYaw += (targetYaw - currentYaw) * lerpFactor;
+        currentPitch += (targetPitch - currentPitch) * lerpFactor;
+
+        // 回転適用（Z軸=0で直立維持）
+        akane.rotation.set(currentPitch, currentYaw, 0);
+      }
+
+      renderer.render(scene, camera);
+    }
+  </script>
 </body>
 </html>
