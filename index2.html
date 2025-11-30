@@ -113,9 +113,9 @@
     #flap-icon {
       width: 40px;
       height: 4px;
-      background: rgba(0, 220, 255, 0.5);
+      background: rgba(255, 50, 50, 0.9);
       border-radius: 2px;
-      box-shadow: 0 0 6px rgba(0, 220, 255, 0.5);
+      box-shadow: 0 0 6px rgba(255, 50, 50, 0.7);
     }
 
     /* チャットテキストエリア */
@@ -346,7 +346,7 @@
       <div id="chat-flap" onclick="toggleChatPanel()">
         <div id="flap-icon"></div>
       </div>
-      <div id="version-tag">Claude036</div>
+      <div id="version-tag">Claude040</div>
       <div id="chat-content">
         <div id="chat-text">
           みなさんこんにちは。わたしはAIコンシェルジュのあかねです。<br>
@@ -377,6 +377,11 @@
 
     let scene, camera, renderer;
     let akane = null;
+    let mixer = null;
+    let clock = null;
+    let dissolveAmount = 0;
+    let dissolveMaterials = [];
+    let noiseTexture = null;
     let modelLoaded = false;
 
     let targetYaw = 0;
@@ -452,6 +457,7 @@
       const height = window.innerHeight;
 
       scene = new THREE.Scene();
+      clock = new THREE.Clock();
 
       camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 100);
       // カメラ設定（モデル高さ2.0、FOV50度から逆算）
@@ -491,22 +497,59 @@
           function(gltf) {
             akane = gltf.scene;
             
-            // 原点がモデル中心(Y=0)にあるため、Y=1.0で足元をY=0に配置
-            akane.position.set(0, 1.0, 0);
+            // 原点が足元にあるため、Y=0でそのまま配置
+            akane.position.set(0, 0, 0);
             akane.scale.set(1.0, 1.0, 1.0);
 
-            // 半透明化
+            // ノイズテクスチャ生成（ディゾルブ用）
+            const noiseSize = 256;
+            const noiseData = new Uint8Array(noiseSize * noiseSize * 4);
+            for (let i = 0; i < noiseSize * noiseSize; i++) {
+              const val = Math.floor(Math.random() * 256);
+              noiseData[i * 4] = val;
+              noiseData[i * 4 + 1] = val;
+              noiseData[i * 4 + 2] = val;
+              noiseData[i * 4 + 3] = val;
+            }
+            noiseTexture = new THREE.DataTexture(noiseData, noiseSize, noiseSize, THREE.RGBAFormat);
+            noiseTexture.needsUpdate = true;
+
+            // 半透明化 + ディゾルブ用マテリアル収集（alphaMapは通常時null）
             akane.traverse((node) => {
               if (node.isMesh) {
                 const materials = Array.isArray(node.material) ? node.material : [node.material];
                 materials.forEach(mat => {
                   mat.transparent = true;
                   mat.opacity = 0.95;
+                  dissolveMaterials.push(mat);
                 });
               }
             });
+            
+            // 5秒毎のディゾルブ開始
+            startDissolveLoop();
 
             scene.add(akane);
+            
+            // アニメーションのセットアップ（3秒インターバル）
+            if (gltf.animations && gltf.animations.length > 0) {
+              mixer = new THREE.AnimationMixer(akane);
+              const action = mixer.clipAction(gltf.animations[0]);
+              action.setLoop(THREE.LoopOnce);
+              action.clampWhenFinished = true;
+              action.play();
+              
+              // アニメーション終了後、3秒待って再生
+              mixer.addEventListener('finished', () => {
+                setTimeout(() => {
+                  action.reset();
+                  action.play();
+                }, 3000);
+              });
+              
+              log('アニメーション再生中: ' + gltf.animations[0].name);
+            }
+            
             modelLoaded = true;
             canInitializeOrientation = true;
             
@@ -669,10 +712,22 @@
     function playDotAnimation() {
       const overlay = document.getElementById('dot-overlay');
       
-      // 13x13のドットを生成
+      // 7色（虹色）
+      const colors = [
+        '#ff0000', // 赤
+        '#ff7700', // オレンジ
+        '#ffff00', // 黄
+        '#00ff00', // 緑
+        '#00ffff', // シアン
+        '#0077ff', // 青
+        '#ff00ff'  // マゼンタ
+      ];
+      
+      // 13x13のドットを生成（7色を順番に割り当て）
       for (let i = 0; i < 169; i++) {
         const dot = document.createElement('div');
         dot.className = 'dot';
+        dot.style.background = colors[i % 7];
         overlay.appendChild(dot);
       }
       
@@ -693,6 +748,51 @@
           overlay.innerHTML = '';
         }
       });
+    }
+
+    // 5秒毎のディゾルブ処理（1秒で非表示→再表示）
+    function startDissolveLoop() {
+      setInterval(() => {
+        // ディゾルブ開始時にalphaMapを設定
+        dissolveMaterials.forEach(mat => {
+          mat.alphaMap = noiseTexture;
+          mat.alphaTest = 0;
+          mat.needsUpdate = true;
+        });
+        
+        const fadeOut = { start: performance.now(), duration: 500 };
+        
+        function animateDissolve() {
+          const elapsed = performance.now() - fadeOut.start;
+          
+          if (elapsed < 500) {
+            // 消えていく（0→1）
+            dissolveAmount = elapsed / 500;
+          } else if (elapsed < 1000) {
+            // 現れる（1→0）
+            dissolveAmount = 1 - (elapsed - 500) / 500;
+          } else {
+            // ディゾルブ終了：alphaMapをnullに戻す
+            dissolveAmount = 0;
+            dissolveMaterials.forEach(mat => {
+              mat.alphaMap = null;
+              mat.alphaTest = 0;
+              mat.needsUpdate = true;
+            });
+            return;
+          }
+          
+          // マテリアルのalphaTestを更新
+          dissolveMaterials.forEach(mat => {
+            mat.alphaTest = dissolveAmount * 0.99;
+            mat.needsUpdate = true;
+          });
+          
+          requestAnimationFrame(animateDissolve);
+        }
+        
+        animateDissolve();
+      }, 5000);
     }
 
     function resetOrientation() {
@@ -722,6 +822,12 @@
     // アニメーションループ
     function animate() {
       requestAnimationFrame(animate);
+      
+      // アニメーション更新
+      if (mixer) {
+        const delta = clock.getDelta();
+        mixer.update(delta);
+      }
 
       if (akane) {
         const lerpFactor = 0.1;
