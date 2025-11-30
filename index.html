@@ -346,7 +346,7 @@
       <div id="chat-flap" onclick="toggleChatPanel()">
         <div id="flap-icon"></div>
       </div>
-      <div id="version-tag">Claude035</div>
+      <div id="version-tag">Claude036</div>
       <div id="chat-content">
         <div id="chat-text">
           みなさんこんにちは。わたしはAIコンシェルジュのあかねです。<br>
@@ -678,15 +678,15 @@
       
       overlay.classList.add('active');
       
-      // anime.jsでアニメーション
+      // anime.jsでアニメーション（全体約2秒）
       const dots = overlay.querySelectorAll('.dot');
       anime({
         targets: dots,
         scale: [
-          { value: 1.1, duration: 400 },
-          { value: 0, duration: 400 }
+          { value: 1.1, duration: 550 },
+          { value: 0, duration: 550 }
         ],
-        delay: anime.stagger(50, { grid: [13, 13], from: 'center' }),
+        delay: anime.stagger(100, { grid: [13, 13], from: 'center' }),
         easing: 'easeInOutQuad',
         complete: function() {
           overlay.classList.remove('active');
