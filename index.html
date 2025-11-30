@@ -113,9 +113,9 @@
     #flap-icon {
       width: 40px;
       height: 4px;
-      background: rgba(0, 220, 255, 0.5);
+      background: rgba(255, 50, 50, 0.9);
       border-radius: 2px;
-      box-shadow: 0 0 6px rgba(0, 220, 255, 0.5);
+      box-shadow: 0 0 6px rgba(255, 50, 50, 0.7);
     }
 
     /* チャットテキストエリア */
@@ -346,7 +346,7 @@
       <div id="chat-flap" onclick="toggleChatPanel()">
         <div id="flap-icon"></div>
       </div>
-      <div id="version-tag">Claude037</div>
+      <div id="version-tag">Claude039</div>
       <div id="chat-content">
         <div id="chat-text">
           みなさんこんにちは。わたしはAIコンシェルジュのあかねです。<br>
@@ -379,6 +379,8 @@
     let akane = null;
     let mixer = null;
     let clock = null;
+    let dissolveAmount = 0;
+    let dissolveMaterials = [];
     let modelLoaded = false;
 
     let targetYaw = 0;
@@ -498,16 +500,35 @@
             akane.position.set(0, 0, 0);
             akane.scale.set(1.0, 1.0, 1.0);
 
-            // 半透明化
+            // ノイズテクスチャ生成（ディゾルブ用）
+            const noiseSize = 256;
+            const noiseData = new Uint8Array(noiseSize * noiseSize * 4);
+            for (let i = 0; i < noiseSize * noiseSize; i++) {
+              const val = Math.floor(Math.random() * 256);
+              noiseData[i * 4] = val;
+              noiseData[i * 4 + 1] = val;
+              noiseData[i * 4 + 2] = val;
+              noiseData[i * 4 + 3] = val;
+            }
+            const noiseTexture = new THREE.DataTexture(noiseData, noiseSize, noiseSize, THREE.RGBAFormat);
+            noiseTexture.needsUpdate = true;
+
+            // 半透明化 + ディゾルブ用セットアップ
             akane.traverse((node) => {
               if (node.isMesh) {
                 const materials = Array.isArray(node.material) ? node.material : [node.material];
                 materials.forEach(mat => {
                   mat.transparent = true;
                   mat.opacity = 0.95;
+                  mat.alphaMap = noiseTexture;
+                  mat.alphaTest = 0;
+                  dissolveMaterials.push(mat);
                 });
               }
             });
+            
+            // 5秒毎のディゾルブ開始
+            startDissolveLoop();
 
             scene.add(akane);
             
@@ -692,10 +713,22 @@
     function playDotAnimation() {
       const overlay = document.getElementById('dot-overlay');
       
-      // 13x13のドットを生成
+      // 7色（虹色）
+      const colors = [
+        '#ff0000', // 赤
+        '#ff7700', // オレンジ
+        '#ffff00', // 黄
+        '#00ff00', // 緑
+        '#00ffff', // シアン
+        '#0077ff', // 青
+        '#ff00ff'  // マゼンタ
+      ];
+      
+      // 13x13のドットを生成（7色を順番に割り当て）
       for (let i = 0; i < 169; i++) {
         const dot = document.createElement('div');
         dot.className = 'dot';
+        dot.style.background = colors[i % 7];
         overlay.appendChild(dot);
       }
       
@@ -716,6 +749,39 @@
           overlay.innerHTML = '';
         }
       });
+    }
+
+    // 5秒毎のディゾルブ処理（1秒で非表示→再表示）
+    function startDissolveLoop() {
+      setInterval(() => {
+        // 0.5秒で消える
+        const fadeOut = { start: performance.now(), duration: 500 };
+        
+        function animateDissolve() {
+          const elapsed = performance.now() - fadeOut.start;
+          
+          if (elapsed < 500) {
+            // 消えていく（0→1）
+            dissolveAmount = elapsed / 500;
+          } else if (elapsed < 1000) {
+            // 現れる（1→0）
+            dissolveAmount = 1 - (elapsed - 500) / 500;
+          } else {
+            dissolveAmount = 0;
+            return; // 終了
+          }
+          
+          // マテリアルのalphaTestを更新
+          dissolveMaterials.forEach(mat => {
+            mat.alphaTest = dissolveAmount * 0.99;
+            mat.needsUpdate = true;
+          });
+          
+          requestAnimationFrame(animateDissolve);
+        }
+        
+        animateDissolve();
+      }, 5000);
     }
 
     function resetOrientation() {
