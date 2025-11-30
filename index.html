@@ -346,7 +346,7 @@
       <div id="chat-flap" onclick="toggleChatPanel()">
         <div id="flap-icon"></div>
       </div>
-      <div id="version-tag">Claude039</div>
+      <div id="version-tag">Claude040</div>
       <div id="chat-content">
         <div id="chat-text">
           みなさんこんにちは。わたしはAIコンシェルジュのあかねです。<br>
@@ -381,6 +381,7 @@
     let clock = null;
     let dissolveAmount = 0;
     let dissolveMaterials = [];
+    let noiseTexture = null;
     let modelLoaded = false;
 
     let targetYaw = 0;
@@ -510,18 +511,16 @@
               noiseData[i * 4 + 2] = val;
               noiseData[i * 4 + 3] = val;
             }
-            const noiseTexture = new THREE.DataTexture(noiseData, noiseSize, noiseSize, THREE.RGBAFormat);
+            noiseTexture = new THREE.DataTexture(noiseData, noiseSize, noiseSize, THREE.RGBAFormat);
             noiseTexture.needsUpdate = true;
 
-            // 半透明化 + ディゾルブ用セットアップ
+            // 半透明化 + ディゾルブ用マテリアル収集（alphaMapは通常時null）
             akane.traverse((node) => {
               if (node.isMesh) {
                 const materials = Array.isArray(node.material) ? node.material : [node.material];
                 materials.forEach(mat => {
                   mat.transparent = true;
                   mat.opacity = 0.95;
-                  mat.alphaMap = noiseTexture;
-                  mat.alphaTest = 0;
                   dissolveMaterials.push(mat);
                 });
               }
@@ -754,7 +753,13 @@
     // 5秒毎のディゾルブ処理（1秒で非表示→再表示）
     function startDissolveLoop() {
       setInterval(() => {
-        // 0.5秒で消える
+        // ディゾルブ開始時にalphaMapを設定
+        dissolveMaterials.forEach(mat => {
+          mat.alphaMap = noiseTexture;
+          mat.alphaTest = 0;
+          mat.needsUpdate = true;
+        });
+        
         const fadeOut = { start: performance.now(), duration: 500 };
         
         function animateDissolve() {
@@ -767,8 +772,14 @@
             // 現れる（1→0）
             dissolveAmount = 1 - (elapsed - 500) / 500;
           } else {
+            // ディゾルブ終了：alphaMapをnullに戻す
             dissolveAmount = 0;
-            return; // 終了
+            dissolveMaterials.forEach(mat => {
+              mat.alphaMap = null;
+              mat.alphaTest = 0;
+              mat.needsUpdate = true;
+            });
+            return;
           }
           
           // マテリアルのalphaTestを更新
