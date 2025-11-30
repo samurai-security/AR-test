@@ -511,11 +511,22 @@
 
             scene.add(akane);
             
-            // アニメーションのセットアップ
+            // アニメーションのセットアップ（3秒インターバル）
             if (gltf.animations && gltf.animations.length > 0) {
               mixer = new THREE.AnimationMixer(akane);
               const action = mixer.clipAction(gltf.animations[0]);
+              action.setLoop(THREE.LoopOnce);
+              action.clampWhenFinished = true;
               action.play();
+              
+              // アニメーション終了後、3秒待って再生
+              mixer.addEventListener('finished', () => {
+                setTimeout(() => {
+                  action.reset();
+                  action.play();
+                }, 3000);
+              });
+              
               log('アニメーション再生中: ' + gltf.animations[0].name);
             }
             

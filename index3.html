@@ -346,7 +346,7 @@
       <div id="chat-flap" onclick="toggleChatPanel()">
         <div id="flap-icon"></div>
       </div>
-      <div id="version-tag">Claude036</div>
+      <div id="version-tag">Claude037</div>
       <div id="chat-content">
         <div id="chat-text">
           みなさんこんにちは。わたしはAIコンシェルジュのあかねです。<br>
@@ -377,6 +377,8 @@
 
     let scene, camera, renderer;
     let akane = null;
+    let mixer = null;
+    let clock = null;
     let modelLoaded = false;
 
     let targetYaw = 0;
@@ -452,6 +454,7 @@
       const height = window.innerHeight;
 
       scene = new THREE.Scene();
+      clock = new THREE.Clock();
 
       camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 100);
       // カメラ設定（モデル高さ2.0、FOV50度から逆算）
@@ -487,12 +490,12 @@
         const loader = new GLTFLoader();
         
         loader.load(
-          'Pink.glb',
+          'pink.glb',
           function(gltf) {
             akane = gltf.scene;
             
             // 原点がモデル中心(Y=0)にあるため、Y=1.0で足元をY=0に配置
-            akane.position.set(0, 1.0, 0);
+            akane.position.set(0, 0, 0);
             akane.scale.set(1.0, 1.0, 1.0);
 
             // 半透明化
@@ -507,6 +510,26 @@
             });
 
             scene.add(akane);
+            
+            // アニメーションのセットアップ（3秒インターバル）
+            if (gltf.animations && gltf.animations.length > 0) {
+              mixer = new THREE.AnimationMixer(akane);
+              const action = mixer.clipAction(gltf.animations[0]);
+              action.setLoop(THREE.LoopOnce);
+              action.clampWhenFinished = true;
+              action.play();
+              
+              // アニメーション終了後、3秒待って再生
+              mixer.addEventListener('finished', () => {
+                setTimeout(() => {
+                  action.reset();
+                  action.play();
+                }, 3000);
+              });
+              
+              log('アニメーション再生中: ' + gltf.animations[0].name);
+            }
+            
             modelLoaded = true;
             canInitializeOrientation = true;
             
@@ -722,6 +745,12 @@
     // アニメーションループ
     function animate() {
       requestAnimationFrame(animate);
+      
+      // アニメーション更新
+      if (mixer) {
+        const delta = clock.getDelta();
+        mixer.update(delta);
+      }
 
       if (akane) {
         const lerpFactor = 0.1;
