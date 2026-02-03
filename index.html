@@ -418,7 +418,7 @@
         log('Three.js初期化...');
         setupThreeJS();
         
-        log('モデル読み込み中: akane.glb');
+        log('モデル読み込み中: ore.glb');
         await loadModel();
         
         setupEventListeners();
@@ -493,7 +493,7 @@
         const loader = new GLTFLoader();
         
         loader.load(
-          'akane.glb',
+          'ore.glb',
           function(gltf) {
             akane = gltf.scene;
             
