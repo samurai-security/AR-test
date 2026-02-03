@@ -418,7 +418,7 @@
         log('Three.js初期化...');
         setupThreeJS();
         
-        log('モデル読み込み中: ore.glb');
+        log('モデル読み込み中: https://ai-rag-lambda-dev-public-455478091724.s3.ap-northeast-1.amazonaws.com/7ba61f8d-ad76-487b-9e71-d260b5b469b6/5825eda8-0ff3-4f2d-9afc-25c536c02200.glb');
         await loadModel();
         
         setupEventListeners();
@@ -493,7 +493,7 @@
         const loader = new GLTFLoader();
         
         loader.load(
-          'ore.glb',
+          'https://ai-rag-lambda-dev-public-455478091724.s3.ap-northeast-1.amazonaws.com/7ba61f8d-ad76-487b-9e71-d260b5b469b6/5825eda8-0ff3-4f2d-9afc-25c536c02200.glb',
           function(gltf) {
             akane = gltf.scene;
             
