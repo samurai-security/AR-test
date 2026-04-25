@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>かつしか散策マップ</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, 'Hiragino Sans', 'Meiryo', sans-serif; }
+.area-scroll {
+  display: flex; gap: 6px; padding: 8px 10px;
+  overflow-x: auto; -webkit-overflow-scrolling: touch;
+  background: #fff; border-bottom: 1px solid #e0e0e0;
+  scrollbar-width: none;
+}
+.area-scroll::-webkit-scrollbar { display: none; }
+.area-btn {
+  flex-shrink: 0; padding: 7px 16px; border-radius: 20px;
+  border: 1px solid #bbb; background: #fff; color: #555;
+  font-size: 13px; font-family: inherit; font-weight: 500;
+  cursor: pointer; transition: all 0.15s; white-space: nowrap;
+}
+.area-btn:hover { background: #f0f0f0; }
+.area-btn.active { background: #333; color: #fff; border-color: #333; }
+#map { width: 100%; height: calc(100vh - 52px); }
+.spot-popup { font-family: -apple-system, 'Hiragino Sans', sans-serif; min-width: 180px; }
+.spot-popup h3 { font-size: 14px; font-weight: 700; color: #333; margin-bottom: 4px; }
+.spot-popup p { font-size: 12px; color: #666; line-height: 1.5; margin: 0; }
+.spot-popup .area-tag {
+  display: inline-block; font-size: 10px; padding: 2px 8px;
+  border-radius: 10px; background: #f0f0f0; color: #555; margin-top: 6px;
+}
+</style>
+</head>
+<body>
+<div class="area-scroll" id="areaBtns"></div>
+<div id="map"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script>
+// ============================================================
+// ★ Googleスプレッドシートの公開URL（CSV）を貼り付けてください
+// ============================================================
+var SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRKcb2FDhdLxpslway8nkm8BcGeVP1EJVJwokIvXN6bGD_uwvgWERsPcjGD8kP5vcdTzyaI_C0U3XA1/pub?gid=0&single=true&output=csv";
+
+// ============================================================
+// 列構成（1行目ヘッダー必須）:
+// name / lat / lng / area / color / description
+// color: red=コラボ / blue=観光 / black=その他
+// ============================================================
+
+var PIN_COLORS = { red: "#D42A2A", black: "#333333", blue: "#2266CC" };
+
+function makeIcon(color) {
+  var hex = PIN_COLORS[color] || PIN_COLORS.black;
+  var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="25" height="41" viewBox="0 0 25 41">'
+    + '<path d="M12.5 0C5.6 0 0 5.6 0 12.5C0 21.9 12.5 41 12.5 41S25 21.9 25 12.5C25 5.6 19.4 0 12.5 0Z" fill="' + hex + '"/>'
+    + '<circle cx="12.5" cy="12.5" r="5" fill="#fff"/></svg>';
+  return L.divIcon({ html: svg, iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [0, -35], className: "" });
+}
+
+var areas = [
+  { name: "全エリア", lat: 35.7480, lng: 139.8530, zoom: 13 },
+  { name: "柴又", lat: 35.7583, lng: 139.8770, zoom: 16 },
+  { name: "高砂・鎌倉", lat: 35.7530, lng: 139.8700, zoom: 16 },
+  { name: "金町・水元", lat: 35.7720, lng: 139.8710, zoom: 15 },
+  { name: "亀有", lat: 35.7625, lng: 139.8490, zoom: 16 },
+  { name: "青戸", lat: 35.7510, lng: 139.8555, zoom: 16 },
+  { name: "立石", lat: 35.7415, lng: 139.8507, zoom: 16 },
+  { name: "お花茶屋", lat: 35.7430, lng: 139.8370, zoom: 16 },
+  { name: "堀切", lat: 35.7450, lng: 139.8080, zoom: 16 },
+  { name: "四つ木", lat: 35.7320, lng: 139.8230, zoom: 16 },
+  { name: "新小岩", lat: 35.7170, lng: 139.8520, zoom: 16 }
+];
+
+var map = L.map("map").setView([areas[0].lat, areas[0].lng], areas[0].zoom);
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  attribution: "&copy; OpenStreetMap contributors", maxZoom: 19
+}).addTo(map);
+
+var allMarkers = [];
+var container = document.getElementById("areaBtns");
+
+areas.forEach(function(a, i) {
+  var btn = document.createElement("button");
+  btn.className = "area-btn" + (i === 0 ? " active" : "");
+  btn.textContent = a.name;
+  btn.onclick = function() {
+    document.querySelectorAll(".area-btn").forEach(function(b) { b.className = "area-btn"; });
+    btn.className = "area-btn active";
+    map.flyTo([a.lat, a.lng], a.zoom, { duration: 0.8 });
+    filterMarkers(a.name);
+  };
+  container.appendChild(btn);
+});
+
+function filterMarkers(areaName) {
+  allMarkers.forEach(function(m) {
+    if (areaName === "全エリア" || m.area === areaName) {
+      map.addLayer(m.marker);
+    } else {
+      map.removeLayer(m.marker);
+    }
+  });
+}
+
+function addMarker(name, lat, lng, area, color, desc) {
+  var marker = L.marker([lat, lng], { icon: makeIcon(color) });
+  marker.bindPopup(
+    '<div class="spot-popup"><h3>' + name + '</h3><p>' + desc + '</p>'
+    + (area ? '<span class="area-tag">' + area + '</span>' : '') + '</div>'
+  );
+  marker.addTo(map);
+  allMarkers.push({ marker: marker, area: area });
+}
+
+Papa.parse(SHEET_URL, {
+  download: true, header: true, skipEmptyLines: true,
+  complete: function(results) {
+    results.data.forEach(function(row) {
+      if (row.name && row.lat && row.lng) {
+        addMarker(row.name, parseFloat(row.lat), parseFloat(row.lng),
+          row.area || "", (row.color || "black").trim().toLowerCase(), row.description || "");
+      }
+    });
+  }
+});
+</script>
+</body>
+</html>
